@@ -1,0 +1,33 @@
+# SAP GUI Automation Framework - Requirements
+# Install with: pip install -r requirements.txt
+
+# Web UI Framework
+nicegui>=3.0
+
+# Windows COM/GUI Automation
+pywin32>=305
+
+# Configuration
+pydantic>=2.0
+pyyaml>=6.0
+python-dotenv>=1.0
+
+# Logging
+loguru>=0.7
+
+# Data Export
+openpyxl>=3.0  # Excel export
+pandas>=2.0  # Optional, for advanced data manipulation
+
+# Testing & Quality
+pytest>=7.0
+pytest-cov>=4.0
+pytest-asyncio>=0.21
+
+# Development (optional)
+black>=23.0  # Code formatter
+flake8>=6.0  # Linter
+mypy>=1.0  # Type checker
+
+loguru>=0.7
+pillow>=10.0

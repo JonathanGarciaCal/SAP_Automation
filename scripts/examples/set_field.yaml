@@ -1,0 +1,22 @@
+name: "Set Field"
+description: "Set any field value in SAP by UI element ID"
+author: "SAP Bridge Team"
+version: "1.0.0"
+tags:
+  - "field-entry"
+  - "basic"
+  - "core"
+timeout_seconds: 10
+parameters:
+  - name: field_id
+    param_type: string
+    required: true
+    description: "SAP UI element ID (e.g., wnd[0]/usr/ctxtVBELN)"
+    default_value: ""
+  - name: field_value
+    param_type: string
+    required: true
+    description: "Value to set in field"
+    default_value: ""
+preconditions: "Field must exist and be accessible in current SAP screen"
+execution_notes: "Sets field value without pressing Enter - caller must handle screen navigation"

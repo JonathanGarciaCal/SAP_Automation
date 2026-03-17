@@ -1,0 +1,38 @@
+# CODEOWNERS file for SAP Automation Framework
+# Defines module ownership and review requirements
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Configuration & CLI
+config.py                    @config-manager
+main.py                      @config-manager
+requirements.txt            @config-manager
+
+# SAP COM Bridge Layer
+sap/bridge.py               @com-bridge-architect
+sap/queue_manager.py        @com-bridge-architect
+sap/connection.py           @com-bridge-architect
+
+# SAP Scripting Layer
+sap/session.py              @sap-scripting-specialist
+sap/inspector.py            @screen-inspector-dev
+sap/script_runner.py        @script-runner-dev
+sap/exporter.py             @report-engine-dev
+sap/error_handler.py        @error-handling-specialist
+
+# NiceGUI Frontend
+ui/                         @nicegui-frontend-engineer
+ui/app.py                   @nicegui-frontend-engineer
+ui/layout.py                @nicegui-frontend-engineer
+ui/pages/                   @nicegui-frontend-engineer
+ui/components/              @nicegui-frontend-engineer
+
+# Tests
+tests/                      @testing-qa-engineer
+.github/workflows/          @testing-qa-engineer
+
+# Documentation
+doc/                        @orchestrator
+.github/memory/             @orchestrator
+PLAN.md                     @orchestrator
+AGENTS.md                   @orchestrator
+README.md                   @orchestrator

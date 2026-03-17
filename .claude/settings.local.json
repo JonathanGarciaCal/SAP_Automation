@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find c:UsersjonatReposNiceGUI_Explorations -type f -name *.agent.md)",
+      "Bash(ls \"c:\\\\Users\\\\jonat\\\\Repos\\\\NiceGUI_Explorations\\\\.github\\\\memory\"\" 2>/dev/null && echo \"EXISTS\" || echo \"NOT FOUND \")"
+    ]
+  }
+}

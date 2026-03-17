@@ -1,0 +1,17 @@
+name: "Simple Navigation"
+description: "Navigate to SAP transaction (e.g., VA01 for Create Sales Order)"
+author: "SAP Bridge Team"
+version: "1.0.0"
+tags:
+  - "navigation"
+  - "basic"
+  - "core"
+timeout_seconds: 30
+parameters:
+  - name: transaction_code
+    param_type: string
+    required: true
+    description: "SAP transaction code (e.g., VA01, VA02, VL01)"
+    default_value: "VA01"
+preconditions: "User must be logged into SAP"
+execution_notes: "Navigates to transaction and waits for screen to load"

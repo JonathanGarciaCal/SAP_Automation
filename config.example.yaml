@@ -1,0 +1,59 @@
+# SAP Configuration
+# This file demonstrates all configuration options.
+# Do NOT commit actual credentials — use environment variables instead.
+
+sap:
+  # Path to SAP Logon file or connection descriptor
+  # Windows example: "C:\\Program Files\\SAP\\FrontEnd\\SAP GUI\\saplogon.ini"
+  # Linux/Mac example: "/opt/sap/saplogon.ini" (if using wine or remote)
+  logon_path: "C:\\Program Files\\SAP\\FrontEnd\\SAP GUI\\saplogon.ini"
+  
+  # SAP username (read from SAP_USERNAME env var if not provided)
+  # username: "demo_user"
+  
+  # SAP password (NEVER hardcode — use SAP_PASSWORD env var)
+  # password: "your_password_here"
+  
+  # SAP client number
+  client: "100"
+  
+  # Language code
+  lang: "EN"
+
+# Web Application Configuration
+app:
+  # Server host address
+  # Use "0.0.0.0" to listen on all interfaces (not recommended for security)
+  # Use "127.0.0.1" for localhost only (default)
+  host: "127.0.0.1"
+  
+  # Server port (must be >= 1024 on Unix without sudo)
+  port: 8080
+  
+  # Enable debug mode (only for development)
+  debug: false
+  
+  # Application title shown in UI
+  title: "SAP Automation Framework"
+
+# Logging Configuration
+logging:
+  # Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
+  level: "INFO"
+  
+  # Log file path (optional, omit for console only)
+  # file: "logs/app.log"
+  
+  # Log message format (uses Python logging format)
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# Feature Flags (enable features for each phase)
+features:
+  # Phase 2: Screen Inspector
+  enable_screen_inspector: false
+  
+  # Phase 3: Script Runner
+  enable_script_runner: false
+  
+  # Phase 4: Report Engine
+  enable_report_engine: false
