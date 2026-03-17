@@ -62,3 +62,10 @@
 **Alternatives rejected**: Compression (future enhancement); smaller backups (insufficient storage); larger backups (excessive disk use for single tool).  
 **Agent**: error-handling-specialist
 
+### 2026-03-17 — Dashboard vs. Tool Page Architecture for UI
+
+**Decision**: NiceGUI pages are categorized into two modes: (1) Dashboard pages (Home) render in degraded mode when session is unavailable, showing structure and status info; (2) Tool pages (Inspector, Script Runner, Reports) return early with a user message when session is unavailable.  
+**Rationale**: Home page is a status dashboard useful even without active SAP connection. Tool pages require live SAP interaction and cannot provide meaningful functionality without a session. Early return prevents users from attempting operations that will fail. Both modes inform users of the limitation.  
+**Alternatives rejected**: All pages return early during init (loses status visibility); all pages render fully (tool pages become non-functional). Mixed approach allows graceful degradation where useful while blocking impossible operations.  
+**Agent**: Orchestrator (during Phase 1 initialization)
+

@@ -63,14 +63,25 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     - Right (25%): Results display with export buttons
     
     Args:
-        session: SAP Session for report execution
+        session: SAP Session for report execution (required for full functionality)
         config: Application configuration
+    
+    Returns:
+        None. Renders page in-place via NiceGUI context.
+    
+    See .github/memory/DECISIONS.md — Dashboard vs. Tool Page Architecture
+    for design rationale: Tool pages return early when session unavailable.
+    
+    Behavior Change (Phase 1):
+        During Phase 1 development, missing session displays a user-friendly message
+        instead of raising ValueError. Once Phase 1 SAP connection initialization is
+        complete, this early return will be unreachable as session will be guaranteed.
     """
     logger.info("Rendering Report Runner page (Phase 4)")
     
     if not session:
         logger.warning("Report Runner page accessed without active SAP session")
-        ui.label('🔌 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
         ui.label(
             'The Report Engine requires an active SAP connection.\n'
             'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'

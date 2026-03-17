@@ -46,8 +46,19 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     search/filter with debounce, grid selection, element highlighting, and properties panel.
     
     Args:
-        session: SAP Session object (required)
+        session: SAP Session object (required for full functionality)
         config: Application configuration
+    
+    Returns:
+        None. Renders page in-place via NiceGUI context.
+    
+    See .github/memory/DECISIONS.md — Dashboard vs. Tool Page Architecture
+    for design rationale: Tool pages return early when session unavailable.
+    
+    Behavior Change (Phase 1):
+        During Phase 1 development, missing session displays a user-friendly message
+        instead of raising ValueError. Once Phase 1 SAP connection initialization is
+        complete, this early return will be unreachable as session will be guaranteed.
     """
     
     if not session:
