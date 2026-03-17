@@ -51,11 +51,27 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         
     Example:
         >>> await page(session=sap_session, config=config)
+    
+    See .github/memory/DECISIONS.md — Dashboard vs. Tool Page Architecture
+    for design rationale: Home renders in degraded mode when session unavailable.
     """
     
     logger.info("Rendering home page")
     
+    # Handle missing session gracefully
+    if not session:
+        logger.warning("Home page accessed without active SAP session")
+    
     with create_page_layout(title='Home', show_sidebar=True, show_header=True):
+        
+        # Initial connection warning if no session
+        if not session:
+            with ui.card().classes('w-full p-4 bg-orange-50 border-l-4 border-orange-500'):
+                ui.label('📡 Awaiting SAP Connection').classes('text-h6 font-semibold text-orange-700')
+                ui.label(
+                    "SAP connection initialization is pending (Phase 1 TODO).\n"
+                    "Once connected, you'll see connection details and can access other features."
+                ).classes('text-body2 text-orange-600')
         
         # ─────────────────────────────────────────────────────────
         # Section 1: Connection Status Card
@@ -148,8 +164,8 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     action_name: Display name (e.g., 'Start VA01')
                     coro_fn: Async function to execute
                 """
+                state = button_states[action_key]
                 try:
-                    state = button_states[action_key]
                     state['loading'] = True
                     state['button'].enabled = False
                     

@@ -64,12 +64,30 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     - Right (25%): Output display and execution history
     
     Args:
-        session: SAP Session for script execution
+        session: SAP Session for script execution (required for full functionality)
         config: Application configuration
-    """
-    from ui.components.parameter_form import ParameterForm
     
+    Returns:
+        None. Renders page in-place via NiceGUI context.
+    
+    See .github/memory/DECISIONS.md — Dashboard vs. Tool Page Architecture
+    for design rationale: Tool pages return early when session unavailable.
+    
+    Behavior Change (Phase 1):
+        During Phase 1 development, missing session displays a user-friendly message
+        instead of raising ValueError. Once Phase 1 SAP connection initialization is
+        complete, this early return will be unreachable as session will be guaranteed.
+    """
     logger.info("Rendering Script Runner page (Phase 3)")
+    
+    if not session:
+        logger.warning("Script Runner page accessed without active SAP session")
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label(
+            'The Script Runner requires an active SAP connection.\n'
+            'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
+        ).classes('text-body2')
+        return
     
     state = _PageState()
     
@@ -84,15 +102,6 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         except Exception as e:
             logger.error(f"Error loading scripts: {e}")
             ui.notify(f"Error: {str(e)}", type="negative")
-            return
-        
-        # Check for session availability
-        if not session:
-            logger.info("Rendering Script Runner page (no session - degraded mode)")
-            with ui.card().classes('w-full p-6'):
-                ui.icon('lock').classes('text-6xl text-orange-500')
-                ui.label('Script Runner requires SAP session').classes('text-lg font-semibold')
-                ui.label('Please log in to SAP first.').classes('text-gray-600')
             return
         
         # Three-column layout

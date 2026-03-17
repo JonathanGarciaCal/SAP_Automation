@@ -6,9 +6,14 @@ See `.github/memory/CONTEXT.md` for project identity, tech stack, architecture c
 
 ## Agent System
 
-This project uses a 10-agent multi-agent system (1 Conductor + 9 Performers).  
+This project uses a 15-agent multi-agent system (1 Conductor + 14 Performers).  
 See `AGENTS.md` at the project root for the full agent registry, tool assignments, and phase-to-agent mapping.  
 Agent instruction files are in `.github/agents/`.
+
+**UI Design Workflow**: All UI work follows a design-first approach.
+- `ux-designer` creates design specifications and accessibility checkLists in `/ui/design/`
+- `nicegui-frontend-engineer` implements those specifications in `/ui/pages/` and `/ui/components/`
+- Design specs are the source of truth; implementation must match the spec
 
 ## Memory
 
