@@ -68,6 +68,15 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     """
     logger.info("Rendering Report Runner page (Phase 4)")
     
+    if not session:
+        logger.warning("Report Runner page accessed without active SAP session")
+        ui.label('🔌 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label(
+            'The Report Engine requires an active SAP connection.\n'
+            'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
+        ).classes('text-body2')
+        return
+    
     state = _PageState()
     
     with create_page_layout(title='Report Engine', show_sidebar=True):

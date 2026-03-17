@@ -48,13 +48,16 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     Args:
         session: SAP Session object (required)
         config: Application configuration
-    
-    Raises:
-        ValueError: If session is not provided
     """
     
     if not session:
-        raise ValueError("Session is required")
+        logger.warning("Screen Inspector page accessed without active SAP session")
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label(
+            'The Screen Inspector requires an active SAP connection.\n'
+            'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
+        ).classes('text-body2')
+        return
     
     logger.info("Rendering Screen Inspector page")
     

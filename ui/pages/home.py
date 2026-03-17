@@ -55,7 +55,20 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     
     logger.info("Rendering home page")
     
+    # Handle missing session gracefully
+    if not session:
+        logger.warning("Home page accessed without active SAP session")
+    
     with create_page_layout(title='Home', show_sidebar=True, show_header=True):
+        
+        # Initial connection warning if no session
+        if not session:
+            with ui.card().classes('w-full p-4 bg-orange-50 border-l-4 border-orange-500'):
+                ui.label('🔌 Awaiting SAP Connection').classes('text-h6 font-semibold text-orange-700')
+                ui.label(
+                    "SAP connection initialization is pending (Phase 1 TODO).\n"
+                    "Once connected, you'll see connection details and can access other features."
+                ).classes('text-body2 text-orange-600')
         
         # ─────────────────────────────────────────────────────────
         # Section 1: Connection Status Card

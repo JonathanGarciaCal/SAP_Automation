@@ -71,6 +71,15 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     
     logger.info("Rendering Script Runner page (Phase 3)")
     
+    if not session:
+        logger.warning("Script Runner page accessed without active SAP session")
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label(
+            'The Script Runner requires an active SAP connection.\n'
+            'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
+        ).classes('text-body2')
+        return
+    
     state = _PageState()
     
     with create_page_layout(title='Script Runner', show_sidebar=True):
