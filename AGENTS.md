@@ -4,7 +4,7 @@
 
 ## System Overview
 
-A 14-agent system for building a NiceGUI-based SAP GUI automation framework on Windows. The Orchestrator (Conductor) delegates implementation and testing work to 13 specialist Performers. Core implementation is handled by 8 specialists scoped to layers/phases. Testing is orchestrated by testing-qa-engineer, which delegates to 3 test batch agents (unit, integration, performance) for isolated test execution. Plan agent leads pre-implementation discovery. All agents share persistent context via a 4-layer memory system in `.github/memory/`. The codebase bridges SAP's COM-based GUI scripting API to a NiceGUI frontend via a dedicated COM worker thread and asyncio queue.
+A 15-agent system for building a NiceGUI-based SAP GUI automation framework on Windows. The Orchestrator (Conductor) delegates discovery, design, implementation, and testing work to 14 specialist Performers. UI design is handled by ux-designer; implementation by 8 specialists scoped to layers/phases. Testing is orchestrated by testing-qa-engineer, which delegates to 3 test batch agents (unit, integration, performance) for isolated test execution. Plan agent leads pre-implementation discovery. All agents share persistent context via a 4-layer memory system in `.github/memory/`. The codebase bridges SAP's COM-based GUI scripting API to a NiceGUI frontend via a dedicated COM worker thread and asyncio queue.
 
 ## Agent Inventory
 
@@ -12,6 +12,7 @@ A 14-agent system for building a NiceGUI-based SAP GUI automation framework on W
 |---|---|---|---|---|---|---|
 | orchestrator | Conductor | All | agent, filesystem/read_file, filesystem/write_file, filesystem/list_directory | yes | R/W: all layers | active |
 | Plan | Performer | Planning/Pre-Phase | search, read, web, agent | yes | R/W: SCRATCHPAD.md, R: CONTEXT.md | active |
+| ux-designer | Performer | Phase 1–5 | read, edit/editFiles, search/codebase | no | R: CONTEXT.md, W: DECISIONS.md | active |
 | com-bridge-architect | Performer | Phase 1 | filesystem/read_file, write_file, create_directory, list_directory | no | R: CONTEXT.md, W: DECISIONS.md | active |
 | config-manager | Performer | Phase 0–1 | filesystem/read_file, write_file, list_directory | no | R: CONTEXT.md, W: DECISIONS.md | active |
 | sap-scripting-specialist | Performer | Phase 1–5 | filesystem/read_file, write_file, search_files, list_directory | no | R: CONTEXT.md, W: DECISIONS.md | active |
@@ -45,11 +46,11 @@ A 14-agent system for building a NiceGUI-based SAP GUI automation framework on W
 | Phase | Lead Agent(s) | Support Agents | Test Orchestration | Target Week |
 |---|---|---|---|---|
 | 0 — Bootstrap | config-manager | com-bridge-architect | testing-qa-engineer (via batches) | Week 0–1 |
-| 1 — Core Foundation | com-bridge-architect, sap-scripting-specialist | config-manager, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 1–3 |
-| 2 — Screen Inspector | screen-inspector-dev | sap-scripting-specialist, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 3–4 |
-| 3 — Script Runner | script-runner-dev | sap-scripting-specialist, config-manager, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 5–6 |
-| 4 — Report Engine | report-engine-dev | sap-scripting-specialist, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 7–8 |
-| 5 — Resilience & Polish | error-handling-specialist | all others | testing-qa-engineer (via batches) | Week 9+ |
+| 1 — Core Foundation | com-bridge-architect, sap-scripting-specialist, **ux-designer** | config-manager, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 1–3 |
+| 2 — Screen Inspector | screen-inspector-dev, **ux-designer** | sap-scripting-specialist, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 3–4 |
+| 3 — Script Runner | script-runner-dev, **ux-designer** | sap-scripting-specialist, config-manager, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 5–6 |
+| 4 — Report Engine | report-engine-dev, **ux-designer** | sap-scripting-specialist, nicegui-frontend-engineer | testing-qa-engineer (via batches) | Week 7–8 |
+| 5 — Resilience & Polish | error-handling-specialist, **ux-designer** | all others | testing-qa-engineer (via batches) | Week 9+ |
 
 ## Module Ownership (CODEOWNERS summary)
 
@@ -60,6 +61,7 @@ A 14-agent system for building a NiceGUI-based SAP GUI automation framework on W
 | `sap/script_runner.py` | script-runner-dev |
 | `sap/exporter.py` | report-engine-dev |
 | `sap/error_handler.py` | error-handling-specialist |
+| `ui/design/` | ux-designer |
 | `ui/pages/`, `ui/components/`, `ui/layout.py` | nicegui-frontend-engineer |
 | `config.py`, `main.py`, `requirements.txt` | config-manager |
 | `tests/`, `.github/workflows/` | testing-qa-engineer |

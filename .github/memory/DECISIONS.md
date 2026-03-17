@@ -48,6 +48,16 @@
 **Alternatives rejected**: Manual context passing (verbose, error-prone); extra dict only (doesn't capture common operational context).  
 **Agent**: error-handling-specialist
 
+### 2026-03-17 — Dedicated UX Designer Agent created (MAS scale from 14 to 15 agents)
+
+**Decision**: Split UI work into two agents: `ux-designer` (design specs, wireframes, accessibility) and `nicegui-frontend-engineer` (implementation only).  
+**Rationale**: SAP GUI automation UI complexity spans multiple phases (1–5) and requires careful attention to accessibility (WCAG 2.1 AA), keyboard navigation, and screen-reader support. Splitting design from implementation allows ux-designer to focus on user-centered design decisions and accessibility audit, while nicegui-frontend-engineer focuses solely on translating specs into NiceGUI code. This separation prevents design decisions and implementation constraints from conflating.  
+**Alternatives rejected**: Keep single nicegui-frontend-engineer owning both (design context gets lost in implementation details; accessibility often deferred); use external design resources (loses alignment with agent workflow and decision history).  
+**Workflow**: Orchestrator → ux-designer (create spec) → nicegui-frontend-engineer (implement per spec) → ux-designer (review for spec adherence; not approval, just feedback).  
+**Agent**: Workspace Architect
+
+
+
 ### 2026-03-14 — UILogHandler for Browser Integration
 
 **Decision**: UILogHandler is a logging.Handler subclass that buffers entries in memory (max 100, configurable), enforces FIFO eviction, and supports optional callback for real-time UI updates.  
