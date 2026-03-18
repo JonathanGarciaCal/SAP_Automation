@@ -4,6 +4,8 @@ Displays system status, connection information, quick action buttons, and recent
 
 Features:
     - SAP connection status card with server, client, user, transaction info
+    - SAP system selector (dropdown from saplogon.ini with manual input fallback)
+    - Connect to SAP button with error handling and timeout support
     - 6 quick action buttons (Start transactions, screenshot, etc.)
     - Recent operations log showing last 10 operations with timestamps
     - All operations logged with status (Success, Timeout, Error)
@@ -30,11 +32,33 @@ from nicegui import ui
 from config import RuntimeConfig
 from sap.session import Session
 from ui.layout import create_page_layout
+from ui.app import connect_to_sap, disconnect_from_sap, get_app_state
+from utils.sap_systems import get_sap_systems
 
 logger = logging.getLogger(__name__)
 
 # Global operations log for this session
 _operations_log: List[Dict[str, Any]] = []
+
+
+def get_active_session() -> Optional[Session]:
+    """Get active SAP session from app state.
+    
+    Reads from _app_state first (for real app); falls back to page parameter
+    (for test compatibility).
+    
+    Returns:
+        Session object if connected, None otherwise
+    """
+    try:
+        app_state = get_app_state()
+        session = app_state.get('session')
+        if session and session.is_connected():
+            return session
+    except Exception as e:
+        logger.debug("Error getting active session from app state: %s", e)
+    
+    return None
 
 
 async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig] = None) -> None:
@@ -135,13 +159,124 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             ui.timer(10.0, lambda: asyncio.create_task(update_connection_status()))
         
         # ─────────────────────────────────────────────────────────
+        # Section 1.5: SAP System Selector & Connect
+        # ─────────────────────────────────────────────────────────
+        with ui.card().classes('w-full p-4'):
+            ui.label('Connect to SAP').classes('text-h6 font-semibold')
+            
+            # Shared state for selected system
+            selected_system: Dict[str, Optional[str]] = {'value': None}
+            connect_button: Any = None
+            status_label = ui.label()
+            
+            # Get available SAP systems
+            sap_systems = get_sap_systems()
+            logger.debug("Found %d SAP systems", len(sap_systems))
+            
+            with ui.row().classes('w-full gap-4'):
+                
+                # System selector (dropdown or text input)
+                if sap_systems:
+                    # Create dropdown with system options
+                    system_options = {sys['sid']: f"{sys['sid']} - {sys['name']}" for sys in sap_systems}
+                    
+                    system_select = ui.select(
+                        value=list(system_options.keys())[0] if system_options else None,
+                        options=system_options
+                    ).classes('flex-grow')
+                    
+                    def on_system_changed(value: Any) -> None:
+                        """Handle system selection change."""
+                        selected_system['value'] = value
+                    
+                    system_select.on_value_change(on_system_changed)
+                    selected_system['value'] = list(system_options.keys())[0] if system_options else None
+                
+                else:
+                    # Fallback: manual text input if no systems found
+                    logger.debug("No SAP systems found; using manual text input")
+                    system_input = ui.input(
+                        label='SAP System ID',
+                        placeholder='e.g., D00'
+                    ).classes('flex-grow')
+                    
+                    def on_system_input_changed(value: Any) -> None:
+                        """Handle manual system ID input."""
+                        selected_system['value'] = value
+                    
+                    system_input.on_value_change(on_system_input_changed)
+                
+                # Connect button
+                async def handle_connect_click() -> None:
+                    """Handle Connect button click."""
+                    system_id = selected_system['value']
+                    
+                    if not system_id:
+                        ui.notify('Please select a system', type='warning')
+                        return
+                    
+                    connect_button.enabled = False
+                    spinner_row: Optional[Any] = None
+                    
+                    try:
+                        # Show spinner
+                        spinner_row = ui.row().classes('w-full')
+                        with spinner_row:
+                            spinner = ui.spinner('dots')
+                        
+                        # Connect with timeout
+                        logger.info("Connecting to system %s", system_id)
+                        session = await asyncio.wait_for(
+                            connect_to_sap(system_id),
+                            timeout=30.0
+                        )
+                        
+                        # Success
+                        status_label.text = f'✅ Connected to {system_id}'
+                        status_label.classes('text-green-600', remove='text-red-600')
+                        ui.notify(f'Connected to {system_id}', type='positive')
+                        log_operation(f'Connect {system_id}', 'Connected', 'Success')
+                        
+                        # Clear spinner
+                        if spinner_row:
+                            spinner_row.clear()
+                    
+                    except asyncio.TimeoutError:
+                        status_label.text = '❌ Connection timeout (30s)'
+                        status_label.classes('text-red-600', remove='text-green-600')
+                        ui.notify('Connection timeout after 30 seconds', type='negative')
+                        log_operation(f'Connect {system_id}', 'Failed', 'Timeout')
+                        if spinner_row:
+                            spinner_row.clear()
+                    
+                    except Exception as e:
+                        error_msg = str(e)[:60]
+                        status_label.text = f'❌ {error_msg}'
+                        status_label.classes('text-red-600', remove='text-green-600')
+                        ui.notify(f'Connection failed: {error_msg}', type='negative')
+                        log_operation(f'Connect {system_id}', 'Failed', error_msg)
+                        if spinner_row:
+                            try:
+                                spinner_row.clear()
+                            except:
+                                pass
+                    
+                    finally:
+                        connect_button.enabled = True
+                
+                connect_button = ui.button('Connect', on_click=handle_connect_click).props('unelevated color=positive')
+            
+            # Status display
+            status_label.classes('text-sm text-gray-600')
+        
+        # ─────────────────────────────────────────────────────────
         # Section 2: Quick Action Buttons (3x2 grid)
         # ─────────────────────────────────────────────────────────
         with ui.card().classes('w-full p-4'):
             ui.label('Quick Actions').classes('text-h6 font-semibold')
             
             # Create button state trackers
-            button_states = {
+            button_states: Dict[str, Dict[str, Any]] = {
                 'va01': {'loading': False, 'button': None},
                 'me23n': {'loading': False, 'button': None},
                 'se11': {'loading': False, 'button': None},
@@ -215,7 +350,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         on_quick_action(
                             'va01',
                             'VA01',
-                            lambda: session.start_transaction('VA01') if session else asyncio.sleep(0)
+                            (lambda s: s.start_transaction('VA01') if s else asyncio.sleep(0))(get_active_session())
                         )
                     )
                 ).classes('flex-grow')
@@ -227,7 +362,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         on_quick_action(
                             'me23n',
                             'ME23N',
-                            lambda: session.start_transaction('ME23N') if session else asyncio.sleep(0)
+                            (lambda s: s.start_transaction('ME23N') if s else asyncio.sleep(0))(get_active_session())
                         )
                     )
                 ).classes('flex-grow')
@@ -239,7 +374,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         on_quick_action(
                             'se11',
                             'SE11',
-                            lambda: session.start_transaction('SE11') if session else asyncio.sleep(0)
+                            (lambda s: s.start_transaction('SE11') if s else asyncio.sleep(0))(get_active_session())
                         )
                     )
                 ).classes('flex-grow')
@@ -265,7 +400,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         on_quick_action(
                             'home',
                             'Go Home',
-                            lambda: session.go_home() if session else asyncio.sleep(0)
+                            (lambda s: s.go_home() if s else asyncio.sleep(0))(get_active_session())
                         )
                     )
                 ).classes('flex-grow')

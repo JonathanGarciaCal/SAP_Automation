@@ -78,6 +78,7 @@ class Session:
     Attributes:
         _queue_manager: QueueManager for COM operations
         _session_id: Session ID (for logging/debugging)
+        _system_id: SAP system ID (e.g., 'D00', 'P00')
         _username: Username of logged-in user
         _connected: Flag indicating if session is active
         _sap_session: Reference to GuiSession COM object (on worker thread)
@@ -86,15 +87,17 @@ class Session:
     def __init__(
         self,
         queue_manager: QueueManager,
-        username: str,
-        session_id: Optional[str] = None
+        username: Optional[str] = None,
+        session_id: Optional[str] = None,
+        system_id: Optional[str] = None
     ) -> None:
         """Initialize SAP session.
         
         Args:
             queue_manager: QueueManager for async COM operations
-            username: Username of logged-in user
+            username: Username of logged-in user (optional for SSO mode)
             session_id: Session ID for logging (generated if not provided)
+            system_id: SAP system ID (e.g., 'D00', 'P00')
         
         Raises:
             ValueError: If queue_manager is None
@@ -104,13 +107,15 @@ class Session:
         
         self._queue_manager = queue_manager
         self._username = username
+        self._system_id = system_id
         self._session_id = session_id or f"session_{id(self)}"
         self._connected = True
         self._sap_session: Optional[Any] = None
         
         logger.debug(
-            "Session initialized: id=%s, username=%s",
+            "Session initialized: id=%s, system=%s, username=%s",
             self._session_id,
+            system_id,
             username
         )
     
@@ -155,6 +160,51 @@ class Session:
         """
         return self._connected
     
+    def _handle_runtime_disconnect(self, operation: str, error: Exception) -> None:
+        """Handle runtime disconnect detection.
+        
+        Inspects error text for known COM/SAP disconnect indicators and marks
+        the session as disconnected if a disconnect is detected.
+        
+        Known disconnect indicators:
+        - "SAPGuiAPIServer object has been deleted"
+        - "The remote object no longer exists"
+        - "Session not connected"
+        - "Object reference not set"
+        - "COM error: Catastrophic failure"
+        
+        Args:
+            operation: Name of the operation that failed (e.g., 'start_transaction')
+            error: The exception that was raised
+        """
+        error_text = str(error).lower()
+        disconnect_keywords = [
+            "has been deleted",
+            "remote object no longer exists",
+            "not connected",
+            "object reference not set",
+            "catastrophic failure",
+            "interface not supported",
+            "target object does not exist"
+        ]
+        
+        is_disconnect = any(keyword in error_text for keyword in disconnect_keywords)
+        
+        if is_disconnect:
+            self._connected = False
+            logger.warning(
+                "Runtime disconnect detected in %s (system=%s): %s",
+                operation,
+                self._system_id,
+                error_text
+            )
+        else:
+            logger.debug(
+                "Operation %s failed but session still connected: %s",
+                operation,
+                error_text
+            )
+    
     # ─────────────────────────────────────────────────────────────────
     # Navigation (4 methods)
     # ─────────────────────────────────────────────────────────────────
@@ -196,6 +246,7 @@ class Session:
             logger.debug("Transaction %s started", transaction_code)
         
         except Exception as e:
+            self._handle_runtime_disconnect("start_transaction", e)
             logger.error("Failed to start transaction %s: %s", transaction_code, e)
             raise
     
@@ -232,6 +283,7 @@ class Session:
             return screen_id
         
         except Exception as e:
+            self._handle_runtime_disconnect("get_current_screen_id", e)
             logger.error("Failed to get current screen: %s", e)
             raise RuntimeError(f"Failed to get current screen: {e}")
     
@@ -263,6 +315,7 @@ class Session:
             logger.debug("Returned to previous screen")
         
         except Exception as e:
+            self._handle_runtime_disconnect("go_back", e)
             logger.error("Failed to go back: %s", e)
             raise
     
@@ -294,6 +347,7 @@ class Session:
             logger.debug("Returned to SAP home")
         
         except Exception as e:
+            self._handle_runtime_disconnect("go_home", e)
             logger.error("Failed to go home: %s", e)
             raise
     
@@ -537,6 +591,7 @@ class Session:
             logger.debug("Key %d sent", key_code)
         
         except Exception as e:
+            self._handle_runtime_disconnect("send_key", e)
             logger.error("Failed to send key %d: %s", key_code, e)
             raise RuntimeError(f"Failed to send key {key_code}: {e}")
     

@@ -16,7 +16,7 @@ Example:
     
     config = get_config()
     conn = SAPConnection(config.sap)
-    session = await conn.open(username='demo', password='pass')
+    session = await conn.open(system_id='D00', use_sso=True)
     await session.start_transaction('VA01')
     ```
 
@@ -24,6 +24,7 @@ CRITICAL CONSTRAINT:
     - All COM operations run on the worker thread, not asyncio main thread
     - Connection object itself is a lightweight wrapper
     - Session is placeholder for Phase 1; Phase 2 will add actual methods
+    - Only SSO authentication is supported; credential-based login is disabled
 """
 
 from typing import Optional, Any, Dict, List
@@ -31,6 +32,8 @@ from pydantic import BaseModel, Field
 import logging
 import asyncio
 import time
+import subprocess
+import os
 
 from config import SAPConfig
 from sap.queue_manager import QueueManager
@@ -43,7 +46,7 @@ logger = logging.getLogger(__name__)
 class SAPConnection:
     """Manages SAP GUI connection via COM scripting.
     
-    Handles connection pooling, credentials, and session lifecycle.
+    Handles SSO-only connection, attach-first strategy, and session lifecycle.
     All COM operations are delegated to the worker thread.
     
     Attributes:
@@ -55,13 +58,14 @@ class SAPConnection:
         _connection_pool: Dict of available connections (for pooling)
         _heartbeat_task: Asyncio task for keep-alive
         _last_activity: Timestamp of last activity
+        _last_connection_diagnostics: Dict tracking connection stage, error, and attempted candidates
     """
     
     def __init__(self, config: SAPConfig) -> None:
         """Initialize SAP connection wrapper.
         
         Args:
-            config: SAPConfig with logon_path, username, password, client, lang
+            config: SAPConfig with logon_path, client, lang
         
         Raises:
             ValueError: If required config fields are missing
@@ -77,76 +81,100 @@ class SAPConnection:
         self._connection_pool: Dict[str, Any] = {}
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._last_activity: float = time.time()
+        self._last_connection_diagnostics: Dict[str, Any] = {}
         
-        logger.debug("SAPConnection initialized with client=%s, lang=%s", config.client, config.lang)
+        logger.debug("SAPConnection initialized (SSO-only mode) with client=%s, lang=%s", config.client, config.lang)
     
-    async def open(
-        self,
-        username: Optional[str] = None,
-        password: Optional[str] = None
-    ) -> "Session":
-        """Open SAP GUI connection.
+    async def open(self, system_id: str, use_sso: bool = True) -> "Session":
+        """Open SAP GUI connection using SSO authentication with attach-first strategy.
         
-        Establishes SAP Logon COM object, logs in with credentials, and returns
-        a Session wrapper. Starts the COM worker thread if not already running.
+        Attempts to attach to an already-running SAP GUI instance before launching
+        a new one. Tracks connection stage and errors for diagnostics.
         
         Args:
-            username: SAP username (uses config if not provided)
-            password: SAP password (uses config if not provided)
+            system_id: SAP system ID (e.g., 'D00', 'P00')
+            use_sso: Must be True (only SSO is supported)
         
         Returns:
             Session object for interacting with SAP
         
         Raises:
             RuntimeError: If connection fails
-            ValueError: If credentials not provided or invalid
+            ValueError: If use_sso=False (credential-based login not supported)
         """
-        logger.info("Opening SAP connection")
+        logger.info("Opening SAP connection to system %s (SSO-only)", system_id)
         
-        # Get credentials
-        user = username or self.config.username
-        pwd = password or self.config.password
+        # Enforce SSO-only mode
+        if not use_sso:
+            raise ValueError("Only SSO mode is supported")
         
-        if not user or not pwd:
-            raise ValueError("Username and password required (provide in call or config)")
-        
-        # Start bridge if needed
-        bridge = SAPBridge()
-        if not bridge.is_running():
-            logger.info("Starting COM worker thread")
-            bridge.start()
-            # Give thread time to initialize
-            await asyncio.sleep(0.5)
+        # Initialize diagnostics
+        self._last_connection_diagnostics = {
+            "system_id": system_id,
+            "stage": None,
+            "error": None,
+            "attach_first_error": None,
+            "attempted_candidates": []
+        }
         
         try:
-            # Create SAP Logon object via queue manager
-            # Note: Phase 1 uses placeholder - Phase 2 will implement actual COM calls
-            logger.debug("Creating SAP Logon COM object for user=%s", user)
+            # Stage 1: Attach-first probe
+            self._last_connection_diagnostics["stage"] = "attach_first_check"
+            logger.debug("Stage 1/3: Attempting to attach to running SAP GUI instance")
             
-            # In Phase 2, this will actually call:
-            # result = await self._queue_manager.call_async(
-            #     'win32com.client.GetObject',
-            #     'SAPLOGON.Application'
-            # )
+            if await self._probe_running_sap(system_id):
+                logger.info("Attached to existing SAP GUI instance for system %s", system_id)
+                self._connected = True
+                self._last_activity = time.time()
+                self._session = Session(self._queue_manager, system_id=system_id)
+                self._start_heartbeat()
+                return self._session
+            else:
+                self._last_connection_diagnostics["attach_first_error"] = "No running SAP GUI instance found"
+                logger.debug("No running SAP instance; will launch new one")
             
-            # For Phase 1, create Session stub
+            # Stage 2: Launcher resolution and launch
+            self._last_connection_diagnostics["stage"] = "launcher_resolution"
+            logger.debug("Stage 2/3: Resolving SAP launcher candidates")
+            launcher_path = self._resolve_sap_launcher_candidates()
+            
+            if not launcher_path:
+                error_msg = "No suitable SAP launcher found in PATH"
+                self._last_connection_diagnostics["error"] = error_msg
+                raise RuntimeError(error_msg)
+            
+            logger.debug("Launching SAP GUI via %s", launcher_path)
+            await self._launch_sap_gui(launcher_path, system_id)
+            
+            # Stage 3: Waiting for SAP to become active
+            self._last_connection_diagnostics["stage"] = "waiting_for_active_session"
+            logger.debug("Stage 3/3: Waiting for SAP session to become active")
+            
+            # Start bridge if needed
+            bridge = SAPBridge()
+            if not bridge.is_running():
+                logger.info("Starting COM worker thread")
+                bridge.start()
+                await asyncio.sleep(0.5)
+            
+            # Create Session stub (Phase 2 will add actual COM calls)
             self._sap_logon = object()  # Placeholder
             self._connected = True
             self._last_activity = time.time()
-            
-            # Create session wrapper
-            self._session = Session(self._queue_manager, user)
-            
-            # Start heartbeat
+            self._session = Session(self._queue_manager, system_id=system_id)
             self._start_heartbeat()
             
-            logger.info("SAP connection opened successfully")
+            logger.info("SAP connection opened successfully for system %s", system_id)
+            self._last_connection_diagnostics["stage"] = "connected"
             return self._session
         
         except Exception as e:
             logger.error("Failed to open SAP connection: %s", e, exc_info=True)
             self._connected = False
-            raise RuntimeError(f"Failed to open SAP connection: {e}")
+            if self._last_connection_diagnostics["error"] is None:
+                self._last_connection_diagnostics["error"] = str(e)
+            self._last_connection_diagnostics["stage"] = "connection_failed"
+            raise RuntimeError(f"Failed to open SAP connection at stage '{self._last_connection_diagnostics['stage']}': {e}")
     
     async def close(self) -> None:
         """Close SAP connection gracefully.
@@ -215,6 +243,97 @@ class SAPConnection:
             QueueManager instance
         """
         return self._queue_manager
+    
+    def get_last_connection_diagnostics(self) -> Dict[str, Any]:
+        """Get diagnostics from the last connection attempt.
+        
+        Returns:
+            Dict with keys: system_id, stage, error, attach_first_error, attempted_candidates
+            - stage: One of 'attach_first_check', 'launcher_resolution', 'waiting_for_active_session', 'connected', 'connection_failed'
+            - error: Error message if connection failed
+            - attach_first_error: Reason why attach-first probe failed (if applicable)
+            - attempted_candidates: List of launcher paths tried
+        """
+        return self._last_connection_diagnostics.copy()
+    
+    def _resolve_sap_launcher_candidates(self) -> Optional[str]:
+        """Resolve SAP launcher executable path.
+        
+        Tries multiple candidates in order of preference:
+        1. sapshcut.exe (newer SAP GUI)
+        2. saplogon.exe (classic SAP Logon)
+        
+        Returns:
+            Path to first found launcher, or None if no launchers found
+        """
+        candidates = ["sapshcut.exe", "saplogon.exe"]
+        self._last_connection_diagnostics["attempted_candidates"] = []
+        
+        for candidate in candidates:
+            logger.debug("Attempting to resolve launcher: %s", candidate)
+            self._last_connection_diagnostics["attempted_candidates"].append(candidate)
+            
+            try:
+                # Try to find in PATH or common SAP locations
+                result = subprocess.run(
+                    f"where {candidate}",
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+                
+                if result.returncode == 0:
+                    path = result.stdout.strip().split('\n')[0]
+                    logger.debug("Found %s at %s", candidate, path)
+                    return path
+            except Exception as e:
+                logger.debug("Failed to find %s: %s", candidate, e)
+        
+        logger.warning("No SAP launcher candidates found in PATH")
+        return None
+    
+    async def _probe_running_sap(self, system_id: str) -> bool:
+        """Probe for already-running SAP GUI instance.
+        
+        Attach-first strategy: check if SAP GUI is already running before launching.
+        
+        Args:
+            system_id: SAP system ID
+        
+        Returns:
+            True if running SAP GUI instance found, False otherwise
+        """
+        try:
+            logger.debug("Probing for running SAP GUI instance (system=%s)", system_id)
+            
+            # In Phase 2, this will use COM to:
+            # 1. Try win32com.client.GetObject("SAPLOGON.Application")
+            # 2. Check if any sessions exist for the target system
+            # For now, return False (always launch new)
+            return False
+        
+        except Exception as e:
+            logger.debug("Attach-first probe failed: %s", e)
+            return False
+    
+    async def _launch_sap_gui(self, launcher_path: str, system_id: str) -> None:
+        """Launch SAP GUI application.
+        
+        Args:
+            launcher_path: Path to sapshcut.exe or saplogon.exe
+            system_id: SAP system ID
+        
+        Raises:
+            RuntimeError: If launch fails
+        """
+        try:
+            logger.debug("Launching SAP GUI: %s (system=%s)", launcher_path, system_id)
+            # In Phase 2, will actually invoke the launcher
+            # For now, Phase 1 is a stub
+        except Exception as e:
+            logger.error("Failed to launch SAP GUI: %s", e)
+            raise RuntimeError(f"Failed to launch SAP GUI: {e}")
     
     @staticmethod
     def get_all_sessions() -> List[Dict]:
@@ -299,23 +418,23 @@ class Session:
     
     Attributes:
         _queue_manager: Queue manager for COM operations
-        _username: Username of logged-in user
+        _system_id: SAP system ID
         _window: SAP window COM object (None in Phase 1)
-        _closed: Flag indicating if session is closed
+        _connected: Flag indicating if session is connected
     """
     
-    def __init__(self, queue_manager: QueueManager, username: str) -> None:
+    def __init__(self, queue_manager: QueueManager, system_id: str) -> None:
         """Initialize session.
         
         Args:
             queue_manager: QueueManager for async COM operations
-            username: Username of logged-in user
+            system_id: SAP system ID (e.g., 'D00', 'P00')
         """
         self._queue_manager = queue_manager
-        self._username = username
+        self._system_id = system_id
         self._window: Optional[Any] = None
-        self._closed: bool = False
-        logger.debug("Session initialized for user=%s", username)
+        self._connected: bool = True
+        logger.debug("Session initialized for system=%s", system_id)
     
     async def close(self) -> None:
         """Close session gracefully.
@@ -323,12 +442,20 @@ class Session:
         Raises:
             RuntimeError: If close fails
         """
-        if self._closed:
+        if not self._connected:
             logger.debug("Session already closed")
             return
         
-        logger.info("Closing SAP session for user=%s", self._username)
-        self._closed = True
+        logger.info("Closing SAP session for system=%s", self._system_id)
+        self._connected = False
+    
+    def is_connected(self) -> bool:
+        """Check if session is still connected.
+        
+        Returns:
+            True if connected, False otherwise
+        """
+        return self._connected
     
     async def start_transaction(self, code: str) -> Dict[str, Any]:
         """Start a SAP transaction.
@@ -345,8 +472,8 @@ class Session:
         Raises:
             RuntimeError: If transaction start fails
         """
-        if self._closed:
-            raise RuntimeError("Session is closed")
+        if not self._connected:
+            raise RuntimeError("Session not connected")
         
         logger.debug("Starting transaction %s", code)
         
@@ -372,8 +499,8 @@ class Session:
         Raises:
             RuntimeError: If field read fails
         """
-        if self._closed:
-            raise RuntimeError("Session is closed")
+        if not self._connected:
+            raise RuntimeError("Session not connected")
         
         logger.debug("Getting field value: %s", field_name)
         
@@ -393,8 +520,8 @@ class Session:
         Raises:
             RuntimeError: If field write fails
         """
-        if self._closed:
-            raise RuntimeError("Session is closed")
+        if not self._connected:
+            raise RuntimeError("Session not connected")
         
         logger.debug("Setting field %s = %s", field_name, value)
         
@@ -413,8 +540,8 @@ class Session:
         Raises:
             RuntimeError: If button click fails
         """
-        if self._closed:
-            raise RuntimeError("Session is closed")
+        if not self._connected:
+            raise RuntimeError("Session not connected")
         
         logger.debug("Clicking button: %s", button_name)
         
@@ -433,8 +560,8 @@ class Session:
         Raises:
             RuntimeError: If key send fails
         """
-        if self._closed:
-            raise RuntimeError("Session is closed")
+        if not self._connected:
+            raise RuntimeError("Session not connected")
         
         logger.debug("Sending key: %s", key)
         
