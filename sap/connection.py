@@ -26,7 +26,7 @@ CRITICAL CONSTRAINT:
     - Session is placeholder for Phase 1; Phase 2 will add actual methods
 """
 
-from typing import Optional, Any, Dict
+from typing import Optional, Any, Dict, List
 from pydantic import BaseModel, Field
 import logging
 import asyncio
@@ -35,6 +35,7 @@ import time
 from config import SAPConfig
 from sap.queue_manager import QueueManager
 from sap.bridge import SAPBridge
+from sap.session_manager import SAP_Session_Manager
 
 logger = logging.getLogger(__name__)
 
@@ -214,6 +215,49 @@ class SAPConnection:
             QueueManager instance
         """
         return self._queue_manager
+    
+    @staticmethod
+    def get_all_sessions() -> List[Dict]:
+        """Get all open SAP sessions across all systems.
+        
+        Convenience method that delegates to SAP_Session_Manager.
+        
+        Returns:
+            List of dicts with session metadata:
+            [{'system': str, 'client': str, 'user': str, 'transaction': str, ...}, ...]
+        
+        Example:
+            ```python
+            sessions = SAPConnection.get_all_sessions()
+            for session in sessions:
+                print(f"{session['system']}/{session['client']}: {session['transaction']}")
+            ```
+        """
+        mgr = SAP_Session_Manager()
+        return mgr.get_all_sessions()
+    
+    @staticmethod
+    def validate_session(session: Any) -> bool:
+        """Validate if session is still alive and responsive.
+        
+        Convenience method that delegates to SAP_Session_Manager.
+        
+        Args:
+            session: GuiSession COM object to validate
+        
+        Returns:
+            True if session is valid and alive, False if closed or unresponsive
+        
+        Example:
+            ```python
+            if SAPConnection.validate_session(session):
+                print("Session is active")
+            else:
+                print("Session disconnected")
+            ```
+        """
+        mgr = SAP_Session_Manager()
+        return mgr.validate_session(session)
     
     def _start_heartbeat(self) -> None:
         """Start periodic heartbeat to keep-alive connection.

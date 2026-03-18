@@ -282,8 +282,8 @@ class RetryManager:
 
     def __init__(
         self,
-        config: RetryConfig = None,
-        circuit_breaker: CircuitBreaker = None
+        config: Optional[RetryConfig] = None,
+        circuit_breaker: Optional[CircuitBreaker] = None
     ) -> None:
         """Initialize retry manager.
 

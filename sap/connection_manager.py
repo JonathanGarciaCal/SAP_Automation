@@ -14,7 +14,7 @@ import psutil
 import os
 import time
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 logger = logging.getLogger(__name__)
 
@@ -179,7 +179,7 @@ class SAPConnectionManager:
         client: Optional[str] = None,
         transaction: Optional[str] = None,
         timeout: int = 10
-    ) -> Optional[object]:
+    ) -> Optional[Any]:
         """
         Get session with retry logic.
         
@@ -242,7 +242,7 @@ class SAPConnectionManager:
         client: Optional[str] = None,
         auto_launch: bool = True,
         timeout: int = 30
-    ) -> object:
+    ) -> Any:
         """
         Smart connection with auto-launch and retry.
         

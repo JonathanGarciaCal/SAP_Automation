@@ -6,7 +6,7 @@ different systems and landscapes (PRD, DEV, QAS, etc.).
 """
 
 import win32com.client
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, Any
 import logging
 
 logger = logging.getLogger(__name__)
@@ -38,7 +38,7 @@ class SAP_Session_Manager:
         system_name: str,
         client_code: str,
         require_session_manager: bool = True
-    ) -> Optional[object]:
+    ) -> Optional[Any]:
         """
         Find session matching system and client.
         
@@ -101,7 +101,7 @@ class SAP_Session_Manager:
             self.logger.error(f"Error finding session: {e}")
             return None
     
-    def get_session_by_transaction(self, transaction_code: str) -> Optional[object]:
+    def get_session_by_transaction(self, transaction_code: str) -> Optional[Any]:
         """
         Find session currently in specific transaction.
         
@@ -183,7 +183,7 @@ class SAP_Session_Manager:
         
         return sessions
     
-    def validate_session(self, session: object) -> bool:
+    def validate_session(self, session: Any) -> bool:
         """
         Check if session is still alive and responsive.
         
@@ -275,7 +275,7 @@ class SAP_Session_Manager:
 
 
 # Convenience function
-def get_session(system: str, client: str) -> Optional[object]:
+def get_session(system: str, client: str) -> Optional[Any]:
     """
     Quick lookup for session.
     

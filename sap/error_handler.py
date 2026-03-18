@@ -350,6 +350,7 @@ class ErrorTranslator:
         user_message = "Unknown SAP error occurred"
         hint = "Please contact support if issue persists"
         category = ErrorCategory.UNKNOWN
+        hresult = None
         
         # Extract HRESULT from pywintypes.com_error if available
         if hasattr(exception, "hresult"):
