@@ -33,6 +33,7 @@ from typing import Optional
 try:
     from config import initialize_config
     from ui.app import create_app
+    from sap.connection import SAPConnection
     from loguru import logger
 except ImportError as e:
     print(f"ERROR: Failed to import required modules: {e}")
@@ -127,11 +128,24 @@ def main(config_path: Optional[Path] = None) -> None:
         print("    - /script-runner (Script Runner)")
         print("    - /reports (Reports & Exports)")
         
-        # TODO (Phase 1): Initialize SAP connection before creating app
-        # sap_connection = SAPConnection(config.sap)
-        # session = await sap_connection.open(config.sap.username, config.sap.password)
-        # app = create_app(config, session=session)
-        create_app(config, session=None)
+        # Initialize SAP connection before creating app (Phase 1)
+        print("[*] Initializing SAP connection...")
+        try:
+            sap_connection = SAPConnection(config.sap)
+            logger.info("SAP connection initialized (SSO-only mode)")
+            print("[+] SAP connection initialized")
+        except ValueError as e:
+            logger.error(f"Failed to initialize SAP connection: {e}")
+            print(f"[!] Error: {e}")
+            print("[!] Check that SAP configuration (logon_path, client, lang) is properly set in config.yaml")
+            sys.exit(1)
+        except Exception as e:
+            logger.exception(f"Unexpected error initializing SAP connection: {e}")
+            print(f"[!] Error: {e}")
+            sys.exit(1)
+        
+        # Create app with initialized connection
+        create_app(config, connection=sap_connection, session=None)
         
         logger.info("NiceGUI application initialized with 4 pages")
         
@@ -147,7 +161,9 @@ def main(config_path: Optional[Path] = None) -> None:
         nicegui_ui.run(
             host=config.app.host,
             port=config.app.port,
-            title=config.app.title
+            title=config.app.title,
+            reload=False,  # Disable watchfiles file-watcher (eliminates page load delay)
+            show=False,    # Don't auto-open browser (user opens manually)
         )
         
     except FileNotFoundError as e:

@@ -35,6 +35,11 @@ import time
 import subprocess
 import os
 
+try:
+    import win32com.client
+except ImportError:
+    win32com = None
+
 from config import SAPConfig
 from sap.queue_manager import QueueManager
 from sap.bridge import SAPBridge
@@ -139,7 +144,7 @@ class SAPConnection:
             launcher_path = self._resolve_sap_launcher_candidates()
             
             if not launcher_path:
-                error_msg = "No suitable SAP launcher found in PATH"
+                error_msg = "No suitable SAP launcher found (checked config paths, common install locations, and system PATH)"
                 self._last_connection_diagnostics["error"] = error_msg
                 raise RuntimeError(error_msg)
             
@@ -263,18 +268,64 @@ class SAPConnection:
         1. sapshcut.exe (newer SAP GUI)
         2. saplogon.exe (classic SAP Logon)
         
+        Checks sources in this priority order:
+        1. config.sapgui_exe_path (if explicitly configured)
+        2. config.logon_path (if it's an executable file)
+        3. Common default SAP installation directories
+        4. System PATH search
+        
         Returns:
             Path to first found launcher, or None if no launchers found
         """
         candidates = ["sapshcut.exe", "saplogon.exe"]
         self._last_connection_diagnostics["attempted_candidates"] = []
         
+        # Priority 1: Check explicitly configured sapgui_exe_path
+        if self.config.sapgui_exe_path:
+            logger.debug("Checking configured sapgui_exe_path: %s", self.config.sapgui_exe_path)
+            self._last_connection_diagnostics["attempted_candidates"].append(
+                f"config.sapgui_exe_path: {self.config.sapgui_exe_path}"
+            )
+            if os.path.isfile(self.config.sapgui_exe_path):
+                logger.debug("Found SAP launcher at configured path: %s", self.config.sapgui_exe_path)
+                return self.config.sapgui_exe_path
+        
+        # Priority 2: Check if logon_path is an executable file
+        if self.config.logon_path and self.config.logon_path.endswith(".exe"):
+            logger.debug("Checking if logon_path is executable: %s", self.config.logon_path)
+            self._last_connection_diagnostics["attempted_candidates"].append(
+                f"config.logon_path (as exe): {self.config.logon_path}"
+            )
+            if os.path.isfile(self.config.logon_path):
+                logger.debug("Found SAP launcher at logon_path: %s", self.config.logon_path)
+                return self.config.logon_path
+        
+        # Priority 3: Check common default SAP installation directories
+        common_sap_locations = [
+            r"C:\Program Files (x86)\SAP\FrontEnd\SAPgui\sapshcut.exe",
+            r"C:\Program Files (x86)\SAP\FrontEnd\SAPgui\saplogon.exe",
+            r"C:\Program Files\SAP\FrontEnd\SAPgui\sapshcut.exe",
+            r"C:\Program Files\SAP\FrontEnd\SAPgui\saplogon.exe",
+        ]
+        
+        for location in common_sap_locations:
+            logger.debug("Checking common SAP location: %s", location)
+            self._last_connection_diagnostics["attempted_candidates"].append(
+                f"common location: {location}"
+            )
+            if os.path.isfile(location):
+                logger.debug("Found SAP launcher at common location: %s", location)
+                return location
+        
+        # Priority 4: Search in system PATH
         for candidate in candidates:
-            logger.debug("Attempting to resolve launcher: %s", candidate)
-            self._last_connection_diagnostics["attempted_candidates"].append(candidate)
+            logger.debug("Attempting to resolve launcher from PATH: %s", candidate)
+            self._last_connection_diagnostics["attempted_candidates"].append(
+                f"PATH search: {candidate}"
+            )
             
             try:
-                # Try to find in PATH or common SAP locations
+                # Try to find in PATH
                 result = subprocess.run(
                     f"where {candidate}",
                     shell=True,
@@ -288,9 +339,9 @@ class SAPConnection:
                     logger.debug("Found %s at %s", candidate, path)
                     return path
             except Exception as e:
-                logger.debug("Failed to find %s: %s", candidate, e)
+                logger.debug("Failed to find %s in PATH: %s", candidate, e)
         
-        logger.warning("No SAP launcher candidates found in PATH")
+        logger.warning("No SAP launcher found in config, common locations, or PATH")
         return None
     
     async def _probe_running_sap(self, system_id: str) -> bool:
@@ -318,22 +369,112 @@ class SAPConnection:
             return False
     
     async def _launch_sap_gui(self, launcher_path: str, system_id: str) -> None:
-        """Launch SAP GUI application.
+        """Launch SAP GUI application with system connection.
+        
+        Launches SAP GUI and automatically connects to the specified system using SSO.
+        Waits for SAP to become active before returning.
         
         Args:
             launcher_path: Path to sapshcut.exe or saplogon.exe
-            system_id: SAP system ID
+            system_id: SAP system descriptor (e.g., "PAG - North American AG Production (SSO)")
         
         Raises:
-            RuntimeError: If launch fails
+            RuntimeError: If launch fails or timeout waiting for SAP to become active
         """
         try:
             logger.debug("Launching SAP GUI: %s (system=%s)", launcher_path, system_id)
-            # In Phase 2, will actually invoke the launcher
-            # For now, Phase 1 is a stub
+            
+            # Extract system code from system_id (first part before " - ")
+            # e.g., "PAG - North American AG Production (SSO)" → "PAG"
+            system_code = system_id.split(" - ")[0].strip() if " - " in system_id else system_id
+            
+            # Build command-line arguments for SAP launcher
+            # Examples:
+            # - sapshcut.exe -system=PAG (without SSO flags, uses system from logon file)
+            # - sapshcut.exe -client=410 (optional client override)
+            cmd_args = [launcher_path, f"-system={system_code}"]
+            
+            # Optional: add client from config if needed
+            if self.config.client:
+                cmd_args.append(f"-client={self.config.client}")
+            
+            logger.debug("SAP launch command: %s", cmd_args)
+            
+            # Launch SAP GUI in separate process
+            process = subprocess.Popen(
+                cmd_args,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            logger.info("SAP GUI process launched (PID: %d)", process.pid)
+            
+            # Wait for SAP GUI to become available via COM scripting
+            sap_available = await self._wait_for_sap_gui_active(system_id, timeout_sec=30)
+            
+            if not sap_available:
+                logger.error("Timeout waiting for SAP GUI to become active")
+                raise RuntimeError("SAP GUI launch timeout: failed to connect within 30 seconds")
+            
+            logger.debug("SAP GUI is now active and responsive")
+            
+        except subprocess.TimeoutExpired:
+            logger.error("SAP launcher process timed out")
+            raise RuntimeError("SAP launcher process timed out")
         except Exception as e:
-            logger.error("Failed to launch SAP GUI: %s", e)
+            logger.error("Failed to launch SAP GUI: %s", e, exc_info=True)
             raise RuntimeError(f"Failed to launch SAP GUI: {e}")
+    
+    async def _wait_for_sap_gui_active(self, system_id: str, timeout_sec: int = 30) -> bool:
+        """Wait for SAP GUI to become active and accessible.
+        
+        Polls for SAP GUI availability via COM scripting with exponential backoff.
+        
+        Args:
+            system_id: SAP system descriptor for logging
+            timeout_sec: Maximum seconds to wait (default 30)
+        
+        Returns:
+            True if SAP GUI became active, False if timeout
+        """
+        if not win32com:
+            logger.warning("win32com.client not available; cannot verify SAP GUI availability")
+            # Still wait a bit for SAP to potentially start
+            await asyncio.sleep(5)
+            return True
+        
+        start_time = time.time()
+        attempt = 0
+        max_attempts = 30  # ~30 seconds with exponential backoff
+        
+        while time.time() - start_time < timeout_sec:
+            try:
+                attempt += 1
+                
+                # Try to get SAP Logon COM object
+                sap_gui_auto = win32com.client.GetObject("SAPGUI")
+                
+                if sap_gui_auto is None:
+                    logger.debug("Attempt %d: SAP GUI COM object not available yet", attempt)
+                else:
+                    logger.debug("Attempt %d: SAP GUI COM object found", attempt)
+                    
+                    # Try to access scripting engine
+                    try:
+                        app = sap_gui_auto.GetScriptingEngine
+                        if app and app.Children.Count > 0:
+                            logger.debug("SAP GUI active with %d connection(s)", app.Children.Count)
+                            return True
+                    except Exception as e:
+                        logger.debug("Scripting engine check failed: %s", e)
+                
+            except Exception as e:
+                logger.debug("Attempt %d: SAP GUI COM check failed: %s", attempt, e)
+            
+            # Exponential backoff: 0.5s, 1s, 1.5s, 2s...
+            await asyncio.sleep(min(0.5 * attempt, 2.0))
+        
+        logger.warning("SAP GUI did not become active within %d seconds", timeout_sec)
+        return False
     
     @staticmethod
     def get_all_sessions() -> List[Dict]:

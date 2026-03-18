@@ -145,8 +145,8 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 
                 transaction_display = ui.label('Screen: (loading)').classes('text-sm')
                 
-                # Initial status update
-                await update_connection_status()
+                # Defer initial status update — avoids blocking page render
+                ui.timer(0.1, update_connection_status, once=True)
                 
                 # Refresh button
                 async def on_refresh_click() -> None:
@@ -185,9 +185,11 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         options=system_options
                     ).classes('flex-grow')
                     
-                    def on_system_changed(value: Any) -> None:
+                    def on_system_changed(args: Any) -> None:
                         """Handle system selection change."""
-                        selected_system['value'] = value
+                        # NiceGUI passes ValueChangeEventArguments; extract the value
+                        system_value = args.value if hasattr(args, 'value') else args
+                        selected_system['value'] = system_value
                     
                     system_select.on_value_change(on_system_changed)
                     selected_system['value'] = list(system_options.keys())[0] if system_options else None
@@ -200,9 +202,11 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         placeholder='e.g., D00'
                     ).classes('flex-grow')
                     
-                    def on_system_input_changed(value: Any) -> None:
+                    def on_system_input_changed(args: Any) -> None:
                         """Handle manual system ID input."""
-                        selected_system['value'] = value
+                        # NiceGUI passes ValueChangeEventArguments; extract the value
+                        system_value = args.value if hasattr(args, 'value') else args
+                        selected_system['value'] = system_value
                     
                     system_input.on_value_change(on_system_input_changed)
                 
