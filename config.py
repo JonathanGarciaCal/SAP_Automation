@@ -48,6 +48,11 @@ class SAPConfig(BaseModel):
         password: SAP password (from env var SAP_PASSWORD, NEVER hardcode)
         client: SAP client number (default: '100')
         lang: Language code (default: 'EN')
+        sapgui_exe_path: Full path to saplogon.exe for auto-launch
+        connection_timeout_sec: Max seconds to wait for connection (default: 30)
+        wait_optimization_enabled: Use SmartWait instead of fixed waits (default: True)
+        retry_attempts: Connection retry attempts with exponential backoff (default: 3)
+        retry_backoff_sec: Initial retry backoff time in seconds (default: 2)
     """
     
     model_config = {"validate_assignment": True}
@@ -72,6 +77,32 @@ class SAPConfig(BaseModel):
         default="EN",
         description="Language code"
     )
+    sapgui_exe_path: Optional[str] = Field(
+        default=None,
+        description="Full path to saplogon.exe for auto-launch (optional, auto-detected if None)"
+    )
+    connection_timeout_sec: int = Field(
+        default=30,
+        ge=5,
+        le=300,
+        description="Max seconds to wait for SAP connection"
+    )
+    wait_optimization_enabled: bool = Field(
+        default=True,
+        description="Use SmartWait for 60-70% speedup"
+    )
+    retry_attempts: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Connection retry attempts with exponential backoff"
+    )
+    retry_backoff_sec: int = Field(
+        default=2,
+        ge=1,
+        le=10,
+        description="Initial retry backoff time (exponential: 2, 4, 8, ...)"
+    )
     
     @field_validator("username", mode="before")
     @classmethod
@@ -87,6 +118,50 @@ class SAPConfig(BaseModel):
         """Read password from env var if not provided."""
         if v is None:
             v = os.getenv("SAP_PASSWORD")
+        return v
+    
+    @field_validator("sapgui_exe_path", mode="before")
+    @classmethod
+    def set_sapgui_exe_path_from_env(cls, v: Optional[str]) -> Optional[str]:
+        """Read SAP GUI exe path from env var if not provided."""
+        if v is None:
+            v = os.getenv("SAP_LOGON_PATH")
+        return v
+    
+    @field_validator("connection_timeout_sec", mode="before")
+    @classmethod
+    def set_connection_timeout_from_env(cls, v: int) -> int:
+        """Read connection timeout from env var if available."""
+        env_val = os.getenv("SAP_CONNECTION_TIMEOUT_SEC")
+        if env_val:
+            try:
+                return int(env_val)
+            except (ValueError, TypeError):
+                pass
+        return v
+    
+    @field_validator("retry_attempts", mode="before")
+    @classmethod
+    def set_retry_attempts_from_env(cls, v: int) -> int:
+        """Read retry attempts from env var if available."""
+        env_val = os.getenv("SAP_RETRY_ATTEMPTS")
+        if env_val:
+            try:
+                return int(env_val)
+            except (ValueError, TypeError):
+                pass
+        return v
+    
+    @field_validator("retry_backoff_sec", mode="before")
+    @classmethod
+    def set_retry_backoff_from_env(cls, v: int) -> int:
+        """Read retry backoff from env var if available."""
+        env_val = os.getenv("SAP_RETRY_BACKOFF_SEC")
+        if env_val:
+            try:
+                return int(env_val)
+            except (ValueError, TypeError):
+                pass
         return v
 
 

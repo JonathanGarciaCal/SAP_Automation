@@ -352,14 +352,13 @@ class ErrorTranslator:
         category = ErrorCategory.UNKNOWN
         
         # Extract HRESULT from pywintypes.com_error if available
-        if hasattr(exception, "hresult"):
-            hresult = exception.hresult
-            if hresult in ErrorTranslator.COM_ERROR_CODES:
-                error_info = ErrorTranslator.COM_ERROR_CODES[hresult]
-                error_class = error_info["error_class"]
-                user_message = error_info["message"]
-                hint = error_info["hint"]
-                category = error_info["category"]
+        hresult = getattr(exception, "hresult", None)
+        if hresult and hresult in ErrorTranslator.COM_ERROR_CODES:
+            error_info = ErrorTranslator.COM_ERROR_CODES[hresult]
+            error_class = error_info["error_class"]
+            user_message = error_info["message"]
+            hint = error_info["hint"]
+            category = error_info["category"]
         
         # Check exception message for keyword patterns
         if not hresult or category == ErrorCategory.UNKNOWN:
