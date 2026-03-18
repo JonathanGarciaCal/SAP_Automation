@@ -7,6 +7,9 @@ nicegui>=3.0
 # Windows COM/GUI Automation
 pywin32>=305
 
+# System & Process Management
+psutil>=5.9  # Process detection for SAP launch detection
+
 # Configuration
 pydantic>=2.0
 pyyaml>=6.0
