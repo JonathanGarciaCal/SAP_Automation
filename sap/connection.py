@@ -44,6 +44,7 @@ from config import SAPConfig
 from sap.queue_manager import QueueManager
 from sap.bridge import SAPBridge
 from sap.session_manager import SAP_Session_Manager
+from sap.session import Session as SAPSession
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ class SAPConnection:
         self.config = config
         self._queue_manager = QueueManager(timeout=30.0)
         self._sap_logon: Optional[Any] = None
-        self._session: Optional[Any] = None
+        self._session: Optional[SAPSession] = None
         self._connected: bool = False
         self._connection_pool: Dict[str, Any] = {}
         self._heartbeat_task: Optional[asyncio.Task] = None
@@ -90,7 +91,7 @@ class SAPConnection:
         
         logger.debug("SAPConnection initialized (SSO-only mode) with client=%s, lang=%s", config.client, config.lang)
     
-    async def open(self, system_id: str, use_sso: bool = True) -> "Session":
+    async def open(self, system_id: str, use_sso: bool = True) -> SAPSession:
         """Open SAP GUI connection using SSO authentication with attach-first strategy.
         
         Attempts to attach to an already-running SAP GUI instance before launching
@@ -131,7 +132,7 @@ class SAPConnection:
                 logger.info("Attached to existing SAP GUI instance for system %s", system_id)
                 self._connected = True
                 self._last_activity = time.time()
-                self._session = Session(self._queue_manager, system_id=system_id)
+                self._session = SAPSession(self._queue_manager, system_id=system_id)
                 self._start_heartbeat()
                 return self._session
             else:
@@ -166,7 +167,7 @@ class SAPConnection:
             self._sap_logon = object()  # Placeholder
             self._connected = True
             self._last_activity = time.time()
-            self._session = Session(self._queue_manager, system_id=system_id)
+            self._session = SAPSession(self._queue_manager, system_id=system_id)
             self._start_heartbeat()
             
             logger.info("SAP connection opened successfully for system %s", system_id)

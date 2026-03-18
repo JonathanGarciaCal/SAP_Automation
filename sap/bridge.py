@@ -45,6 +45,11 @@ from enum import Enum
 
 logger = logging.getLogger(__name__)
 
+try:
+    import win32com.client  # type: ignore
+except ImportError:  # pragma: no cover - handled at runtime on Windows deployments
+    win32com = None
+
 
 class CommandStatus(Enum):
     """Status of a command execution."""
@@ -340,9 +345,7 @@ class SAPBridge:
         response: Optional[CommandResponse] = None
         
         try:
-            # Placeholder: In real implementation, would invoke COM method here
-            # For now, just track metrics
-            result = None  # Will be populated by actual method invocation
+            result = self._execute_command(command)
             
             elapsed_ms = (time.time() - start_time) * 1000
             
@@ -387,3 +390,80 @@ class SAPBridge:
                 
                 # Send result back to caller
                 self._result_queue.put(response)
+
+    def _execute_command(self, command: Command) -> Any:
+        """Execute a supported SAP GUI command on the COM worker thread.
+
+        Args:
+            command: Command with method and kwargs to execute
+
+        Returns:
+            Primitive result from SAP COM call
+
+        Raises:
+            RuntimeError: If COM is unavailable, no active SAP session exists, or method is unsupported
+        """
+        method = command.method
+
+        if method.startswith("GuiSession."):
+            session = self._get_active_gui_session()
+
+            if method == "GuiSession.StartTransaction":
+                transaction_code = command.kwargs.get("transaction_code")
+                if not transaction_code:
+                    raise ValueError("transaction_code is required")
+                session.StartTransaction(str(transaction_code))
+                return None
+
+            if method == "GuiSession.GoBack":
+                # SAP Back key (F3)
+                session.SendVKey(3)
+                return None
+
+            if method == "GuiSession.GoHome":
+                # Prefer direct command field navigation to SAP Easy Access.
+                okcode = session.FindById("wnd[0]/tbar[0]/okcd")
+                okcode.Text = "/n"
+                session.FindById("wnd[0]").SendVKey(0)
+                return None
+
+            if method == "GuiSession.GetCurrentScreen":
+                window = session.FindById("wnd[0]")
+                return str(window.Id)
+
+            if method == "GuiSession.EndSession":
+                # Graceful close for current session.
+                try:
+                    session.EndTransaction()
+                except Exception:
+                    session.FindById("wnd[0]").Close()
+                return None
+
+        # Keep compatibility with existing placeholder behavior for unimplemented methods.
+        return None
+
+    def _get_active_gui_session(self) -> Any:
+        """Resolve the first active SAP GUI session from COM.
+
+        Returns:
+            Active GuiSession COM object
+
+        Raises:
+            RuntimeError: If SAP GUI scripting engine or an active session is unavailable
+        """
+        if not win32com:
+            raise RuntimeError("win32com is not available")
+
+        sap_gui_auto = win32com.client.GetObject("SAPGUI")
+        if sap_gui_auto is None:
+            raise RuntimeError("SAP GUI COM object not available")
+
+        app = sap_gui_auto.GetScriptingEngine
+        if app is None or app.Children.Count == 0:
+            raise RuntimeError("No active SAP connections found")
+
+        connection = app.Children(0)
+        if connection.Children.Count == 0:
+            raise RuntimeError("No active SAP sessions found")
+
+        return connection.Children(0)

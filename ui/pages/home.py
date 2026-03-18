@@ -25,7 +25,7 @@ Example:
 import logging
 import asyncio
 import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Callable, Awaitable
 
 from nicegui import ui
 
@@ -294,14 +294,14 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             async def on_quick_action(
                 action_key: str,
                 action_name: str,
-                coro_fn
+                coro_fn: Callable[[], Awaitable[None]]
             ) -> None:
                 """Handle quick action button click.
                 
                 Args:
                     action_key: State key for button (e.g., 'va01')
                     action_name: Display name (e.g., 'Start VA01')
-                    coro_fn: Async function to execute
+                    coro_fn: Callable that returns an awaitable action
                 """
                 state = button_states[action_key]
                 try:
@@ -346,79 +346,113 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             
             # Create action buttons in 3x2 grid
             with ui.row().classes('w-full gap-2'):
+                async def on_start_va01_click() -> None:
+                    """Handle Start VA01 button click."""
+                    active_session = get_active_session()
+                    if not active_session:
+                        log_operation('VA01', 'Started', 'No active session')
+                        ui.notify('No active SAP session', type='warning')
+                        return
+
+                    await on_quick_action(
+                        'va01',
+                        'VA01',
+                        lambda: active_session.start_transaction('VA01')
+                    )
+
+                async def on_start_me23n_click() -> None:
+                    """Handle Start ME23N button click."""
+                    active_session = get_active_session()
+                    if not active_session:
+                        log_operation('ME23N', 'Started', 'No active session')
+                        ui.notify('No active SAP session', type='warning')
+                        return
+
+                    await on_quick_action(
+                        'me23n',
+                        'ME23N',
+                        lambda: active_session.start_transaction('ME23N')
+                    )
+
+                async def on_start_se11_click() -> None:
+                    """Handle Start SE11 button click."""
+                    active_session = get_active_session()
+                    if not active_session:
+                        log_operation('SE11', 'Started', 'No active session')
+                        ui.notify('No active SAP session', type='warning')
+                        return
+
+                    await on_quick_action(
+                        'se11',
+                        'SE11',
+                        lambda: active_session.start_transaction('SE11')
+                    )
                 
                 # Start VA01 button
                 button_states['va01']['button'] = ui.button(
                     'Start VA01',
-                    on_click=lambda: asyncio.create_task(
-                        on_quick_action(
-                            'va01',
-                            'VA01',
-                            (lambda s: s.start_transaction('VA01') if s else asyncio.sleep(0))(get_active_session())
-                        )
-                    )
+                    on_click=on_start_va01_click
                 ).classes('flex-grow')
                 
                 # Start ME23N button
                 button_states['me23n']['button'] = ui.button(
                     'Start ME23N',
-                    on_click=lambda: asyncio.create_task(
-                        on_quick_action(
-                            'me23n',
-                            'ME23N',
-                            (lambda s: s.start_transaction('ME23N') if s else asyncio.sleep(0))(get_active_session())
-                        )
-                    )
+                    on_click=on_start_me23n_click
                 ).classes('flex-grow')
                 
                 # Start SE11 button
                 button_states['se11']['button'] = ui.button(
                     'Start SE11',
-                    on_click=lambda: asyncio.create_task(
-                        on_quick_action(
-                            'se11',
-                            'SE11',
-                            (lambda s: s.start_transaction('SE11') if s else asyncio.sleep(0))(get_active_session())
-                        )
-                    )
+                    on_click=on_start_se11_click
                 ).classes('flex-grow')
             
             with ui.row().classes('w-full gap-2'):
+                async def on_take_screenshot_click() -> None:
+                    """Handle Take Screenshot button click."""
+                    await on_quick_action(
+                        'screenshot',
+                        'Screenshot',
+                        lambda: asyncio.sleep(1)
+                    )
+
+                async def on_go_home_click() -> None:
+                    """Handle Go Home button click."""
+                    active_session = get_active_session()
+                    if not active_session:
+                        log_operation('Go Home', 'Started', 'No active session')
+                        ui.notify('No active SAP session', type='warning')
+                        return
+
+                    await on_quick_action(
+                        'home',
+                        'Go Home',
+                        lambda: active_session.go_home()
+                    )
+
+                async def on_refresh_status_click() -> None:
+                    """Handle Refresh Status button click."""
+                    await on_quick_action(
+                        'refresh',
+                        'Refresh',
+                        lambda: asyncio.sleep(0.5)
+                    )
                 
                 # Take screenshot button
                 button_states['screenshot']['button'] = ui.button(
                     'Take Screenshot',
-                    on_click=lambda: asyncio.create_task(
-                        on_quick_action(
-                            'screenshot',
-                            'Screenshot',
-                            lambda: asyncio.sleep(1)  # Placeholder
-                        )
-                    )
+                    on_click=on_take_screenshot_click
                 ).classes('flex-grow')
                 
                 # Go Home button
                 button_states['home']['button'] = ui.button(
                     'Go Home',
-                    on_click=lambda: asyncio.create_task(
-                        on_quick_action(
-                            'home',
-                            'Go Home',
-                            (lambda s: s.go_home() if s else asyncio.sleep(0))(get_active_session())
-                        )
-                    )
+                    on_click=on_go_home_click
                 ).classes('flex-grow')
                 
                 # Refresh Status button
                 button_states['refresh']['button'] = ui.button(
                     'Refresh Status',
-                    on_click=lambda: asyncio.create_task(
-                        on_quick_action(
-                            'refresh',
-                            'Refresh',
-                            lambda: asyncio.sleep(0.5)
-                        )
-                    )
+                    on_click=on_refresh_status_click
                 ).classes('flex-grow')
         
         # ─────────────────────────────────────────────────────────
