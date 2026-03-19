@@ -173,7 +173,15 @@ def _render_report_browser(state: _PageState) -> None:
             ],
             'rowData': initial_rows,
             'rowSelection': 'single',
-            'defaultColDef': {'resizable': True},
+            'theme': 'balham',
+            'defaultColDef': {
+                'resizable': True,
+                'cellStyle': {
+                    'color': '#111827',
+                    'fontSize': '13px',
+                },
+            },
+            'rowHeight': 32,
         }).classes('w-full text-sm')
         
         def load_reports(query: str = "") -> None:

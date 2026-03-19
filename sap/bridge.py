@@ -35,6 +35,8 @@ CRITICAL CONSTRAINT:
 """
 
 from typing import Any, Dict, Optional, Callable
+import os
+import tempfile
 import threading
 import queue
 import logging
@@ -44,6 +46,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+try:
+    import win32com.client  # type: ignore
+except ImportError:  # pragma: no cover - handled at runtime on Windows deployments
+    win32com = None
 
 
 class CommandStatus(Enum):
@@ -117,6 +124,7 @@ class SAPBridge:
         _running: Flag indicating if worker thread is active
         _metrics: Metrics tracking (queue depth, latency)
         _lock: Threading lock for state changes
+        _com_ready_event: Threading event signaling COM and SAPGUI are initialized
     """
     
     _instance: Optional["SAPBridge"] = None
@@ -140,6 +148,7 @@ class SAPBridge:
         self._result_queue: queue.Queue = queue.Queue()
         self._running: bool = False
         self._shutdown_event: threading.Event = threading.Event()
+        self._com_ready_event: threading.Event = threading.Event()
         self._metrics: Dict[str, Any] = {
             "commands_processed": 0,
             "total_time_ms": 0.0,
@@ -150,19 +159,25 @@ class SAPBridge:
         self._initialized: bool = True
         logger.debug("SAPBridge initialized")
     
-    def start(self) -> None:
-        """Start the COM worker thread.
+    def start(self, wait_for_com_ready: bool = True, timeout_sec: float = 10.0) -> None:
+        """Start the COM worker thread and optionally wait for COM/SAPGUI to be ready.
         
         Creates and starts a new worker thread that will initialize COM
-        and begin processing commands from the queue.
+        and begin processing commands from the queue. If wait_for_com_ready is True,
+        blocks until the worker thread has verified SAP COM objects are available.
+        
+        Args:
+            wait_for_com_ready: If True, wait for COM and SAPGUI to be initialized before returning
+            timeout_sec: Maximum seconds to wait for COM readiness (default: 10)
         
         Raises:
-            RuntimeError: If worker thread is already running
+            RuntimeError: If worker thread is already running or COM fails to initialize
         """
         if self._running:
             logger.warning("SAPBridge worker thread already running")
             return
         
+        self._com_ready_event.clear()
         self._shutdown_event.clear()
         self._worker_thread = threading.Thread(
             target=self._worker_loop,
@@ -172,6 +187,14 @@ class SAPBridge:
         self._worker_thread.start()
         self._running = True
         logger.info("SAPBridge worker thread started (thread_id=%s)", self._worker_thread.ident)
+        
+        if wait_for_com_ready:
+            if not self._com_ready_event.wait(timeout=timeout_sec):
+                logger.error("COM and SAPGUI did not become ready within %s seconds", timeout_sec)
+                # Reset singleton so next call can retry with fresh thread
+                self._running = False
+                raise RuntimeError(f"SAP COM objects not available within {timeout_sec}s")
+            logger.debug("SAP COM objects verified and ready")
     
     def stop(self, timeout_sec: float = 5.0) -> None:
         """Stop the COM worker thread gracefully.
@@ -287,7 +310,7 @@ class SAPBridge:
     def _worker_loop(self) -> None:
         """Worker thread main loop (runs on worker thread, not main thread).
         
-        Initializes COM, processes commands from queue, and resolves futures.
+        Initializes COM, validates SAPGUI, processes commands from queue, and resolves futures.
         """
         try:
             # Initialize COM in worker thread
@@ -297,10 +320,18 @@ class SAPBridge:
                 logger.error("pythoncom not available - ensure pywin32 is installed")
                 return
             
-            pythoncom.CoInitialize()  # type: ignore
+            pythoncom.CoInitialize()  # type: ignore[attr-defined]
             logger.info("COM initialized on worker thread")
+            
+            # Verify SAPGUI COM objects are available
+            self._verify_sapgui_ready()
+            
+            # Signal that COM and SAPGUI are ready
+            self._com_ready_event.set()
+            
         except Exception as e:
-            logger.error("Failed to initialize COM: %s", e)
+            logger.error("Failed to initialize COM or verify SAPGUI: %s", e)
+            # Do NOT set the event - let the caller timeout with a clear error
             return
         
         try:
@@ -324,7 +355,7 @@ class SAPBridge:
             # Cleanup COM
             try:
                 import pythoncom  # type: ignore
-                pythoncom.CoUninitialize()  # type: ignore
+                pythoncom.CoUninitialize()  # type: ignore[attr-defined]
                 logger.info("COM uninitialized on worker thread")
             except Exception as e:
                 logger.error("Error during COM cleanup: %s", e)
@@ -340,9 +371,7 @@ class SAPBridge:
         response: Optional[CommandResponse] = None
         
         try:
-            # Placeholder: In real implementation, would invoke COM method here
-            # For now, just track metrics
-            result = None  # Will be populated by actual method invocation
+            result = self._execute_command(command)
             
             elapsed_ms = (time.time() - start_time) * 1000
             
@@ -387,3 +416,218 @@ class SAPBridge:
                 
                 # Send result back to caller
                 self._result_queue.put(response)
+
+    def _execute_command(self, command: Command) -> Any:
+        """Execute a supported SAP GUI command on the COM worker thread.
+
+        Args:
+            command: Command with method and kwargs to execute
+
+        Returns:
+            Primitive result from SAP COM call
+
+        Raises:
+            RuntimeError: If COM is unavailable, no active SAP session exists, or method is unsupported
+        """
+        method = command.method
+
+        if method.startswith("GuiSession."):
+            session = self._get_active_gui_session()
+
+            if method == "GuiSession.StartTransaction":
+                transaction_code = command.kwargs.get("transaction_code")
+                if not transaction_code:
+                    raise ValueError("transaction_code is required")
+                session.StartTransaction(str(transaction_code))
+                return None
+
+            if method == "GuiSession.GoBack":
+                # SAP Back key (F3)
+                session.SendVKey(3)
+                return None
+
+            if method == "GuiSession.GoHome":
+                # Prefer direct command field navigation to SAP Easy Access.
+                okcode = session.FindById("wnd[0]/tbar[0]/okcd")
+                okcode.Text = "/n"
+                session.FindById("wnd[0]").SendVKey(0)
+                return None
+
+            if method == "GuiSession.GetCurrentScreen":
+                window = session.FindById("wnd[0]")
+                return str(window.Id)
+
+            if method == "GuiSession.GetConnectionStatus":
+                info = getattr(session, "Info", None)
+                screen_id = ""
+                try:
+                    screen_id = str(session.FindById("wnd[0]").Id)
+                except Exception:
+                    # Screen ID is optional for status rendering.
+                    screen_id = ""
+
+                return {
+                    "system": str(getattr(info, "SystemName", "") or ""),
+                    "client": str(getattr(info, "Client", "") or ""),
+                    "user": str(getattr(info, "User", "") or ""),
+                    "transaction": str(getattr(info, "Transaction", "") or ""),
+                    "screen": screen_id,
+                }
+
+            if method == "GuiSession.EndSession":
+                # Graceful close for current session.
+                try:
+                    session.EndTransaction()
+                except Exception:
+                    session.FindById("wnd[0]").Close()
+                return None
+
+            if method == "GuiSession.TakeScreenshot":
+                window = session.FindById("wnd[0]")
+                fd, tmp_path = tempfile.mkstemp(suffix='.png')
+                os.close(fd)
+                try:
+                    window.HardCopy(tmp_path, 'png')
+                    with open(tmp_path, 'rb') as f:
+                        return f.read()
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except OSError:
+                        pass
+
+            if method == "GuiSession.GetElementTree":
+                root_id = command.kwargs.get("root_id", "/app/con[0]/ses[0]/wnd[0]")
+                _max_depth = int(command.kwargs.get("max_depth", 20))
+                _max_elements = int(command.kwargs.get("max_elements", 5000))
+                _element_count: list = [0]  # mutable counter for closure
+                # Strip outer brackets added by Python-side code (e.g., "[/app/...]" → "/app/...")
+                if isinstance(root_id, str) and root_id.startswith("[") and root_id.endswith("]"):
+                    sap_path = root_id[1:-1]
+                else:
+                    sap_path = root_id
+
+                try:
+                    root_elem = session.FindById(sap_path)
+                except Exception:
+                    root_elem = session.FindById("wnd[0]")
+
+                def _serialize_element(elem: Any, depth: int = 0, max_depth: int = 20) -> Optional[Dict[str, Any]]:
+                    """Recursively serialize a SAP COM element to a primitive dict."""
+                    if depth > max_depth or _element_count[0] >= _max_elements:
+                        return None
+                    _element_count[0] += 1
+                    result: Dict[str, Any] = {
+                        "id": "",
+                        "type": "Unknown",
+                        "name": "",
+                        "text": "",
+                        "x": 0,
+                        "y": 0,
+                        "width": 0,
+                        "height": 0,
+                        "visible": True,
+                        "enabled": True,
+                        "value": None,
+                        "children": [],
+                    }
+                    try:
+                        result["id"] = str(elem.Id)
+                    except Exception:
+                        return None  # skip elements that cannot be identified
+                    try:
+                        result["type"] = str(elem.Type)
+                    except Exception:
+                        pass
+                    try:
+                        result["name"] = str(elem.Name or "")
+                    except Exception:
+                        pass
+                    try:
+                        result["text"] = str(elem.Text or "")
+                    except Exception:
+                        pass
+                    for attr, key in [("ScreenLeft", "x"), ("ScreenTop", "y"), ("Width", "width"), ("Height", "height")]:
+                        try:
+                            result[key] = int(getattr(elem, attr))
+                        except Exception:
+                            pass
+                    try:
+                        result["visible"] = bool(elem.Visible)
+                    except Exception:
+                        pass
+                    try:
+                        result["enabled"] = bool(elem.Changeable)
+                    except Exception:
+                        pass
+                    try:
+                        children = elem.Children
+                        for i in range(children.Count):
+                            child_dict = _serialize_element(children(i), depth + 1, max_depth)
+                            if child_dict is not None:
+                                result["children"].append(child_dict)
+                    except Exception:
+                        pass
+                    return result
+
+                tree = _serialize_element(root_elem, max_depth=_max_depth)
+                if tree is None:
+                    return {"id": root_id, "type": "Window", "name": "SAP Window", "children": []}
+                return tree
+
+        # Keep compatibility with existing placeholder behavior for unimplemented methods.
+        return None
+
+    def _verify_sapgui_ready(self) -> None:
+        """Verify that SAPGUI COM objects are available on worker thread.
+        
+        Called during worker thread initialization to ensure SAP COM scripting engine
+        is ready before accepting commands. Requires at least one active connection;
+        sessions may still be initializing (they are created lazily by SAP).
+        
+        Raises:
+            RuntimeError: If SAPGUI or scripting engine not available
+        """
+        if not win32com:
+            raise RuntimeError("win32com is not available")
+        
+        sap_gui_auto = win32com.client.GetObject("SAPGUI")
+        if sap_gui_auto is None:
+            raise RuntimeError("SAP GUI COM object not available")
+        
+        app = sap_gui_auto.GetScriptingEngine
+        if app is None:
+            raise RuntimeError("SAP GUI Scripting Engine not available")
+        
+        if app.Children.Count == 0:
+            raise RuntimeError("No active SAP connections found")
+        
+        # Verify at least one connection exists (sessions initialize lazily)
+        connection = app.Children(0)
+        logger.info("SAPGUI COM objects verified: %d connection(s)", app.Children.Count)
+    
+    def _get_active_gui_session(self) -> Any:
+        """Resolve the first active SAP GUI session from COM.
+
+        Returns:
+            Active GuiSession COM object
+
+        Raises:
+            RuntimeError: If SAP GUI scripting engine or an active session is unavailable
+        """
+        if not win32com:
+            raise RuntimeError("win32com is not available")
+
+        sap_gui_auto = win32com.client.GetObject("SAPGUI")
+        if sap_gui_auto is None:
+            raise RuntimeError("SAP GUI COM object not available")
+
+        app = sap_gui_auto.GetScriptingEngine
+        if app is None or app.Children.Count == 0:
+            raise RuntimeError("No active SAP connections found")
+
+        connection = app.Children(0)
+        if connection.Children.Count == 0:
+            raise RuntimeError("No active SAP sessions found")
+
+        return connection.Children(0)

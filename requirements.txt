@@ -32,5 +32,4 @@ black>=23.0  # Code formatter
 flake8>=6.0  # Linter
 mypy>=1.0  # Type checker
 
-loguru>=0.7
 pillow>=10.0

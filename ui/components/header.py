@@ -61,8 +61,8 @@ def render(
     logger.debug("Rendering header: title=%s, session=%r", title, session)
     
     # Get username
-    username = "Anonymous"
-    if session and hasattr(session, '_username'):
+    username: str = "Anonymous"
+    if session and hasattr(session, '_username') and session._username:
         username = session._username
     elif config and config.sap.username:
         username = config.sap.username
@@ -97,15 +97,11 @@ def render(
                     status_indicator.text = '? Unknown'
                     status_indicator.classes('text-yellow-300')
             
-            # Initial status update
-            try:
-                asyncio.create_task(update_status())
-            except RuntimeError:
-                # No event loop in test context
-                pass
+            # Initial status update (once=True fires after render, keeps NiceGUI slot context)
+            ui.timer(0, update_status, once=True)
             
             # Poll status every 5 seconds
-            ui.timer(5.0, lambda: asyncio.create_task(update_status()) if asyncio.get_event_loop().is_running() else None)
+            ui.timer(5.0, update_status)
             
             # User name
             ui.label(username).classes('text-white font-semibold')
@@ -116,24 +112,17 @@ def render(
                 logger.info("Logout requested for user: %s", username)
                 
                 try:
-                    if session:
-                        await session.close()
-                        logger.info("Session closed successfully")
+                    from ui.app import disconnect_from_sap
+                    await disconnect_from_sap()
+                    logger.info("Disconnected from SAP successfully")
                 except Exception as e:
-                    logger.error("Error closing session during logout: %s", e)
-                
-                # Clear app state
-                from ui.app import get_app_state, set_app_error
-                app_state = get_app_state()
-                app_state['error'] = None
-                app_state['session'] = None
-                set_app_error(None)
+                    logger.error("Error disconnecting from SAP during logout: %s", e)
                 
                 # Show success notification
                 ui.notify('Logged out successfully', type='positive')
                 
                 # Redirect to home
-                ui.navigate('/')
+                ui.navigate.to('/')
             
             ui.button(
                 icon='logout',

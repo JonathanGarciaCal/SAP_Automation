@@ -15,6 +15,7 @@ Test Groups:
 Total: 23+ integration tests
 """
 
+import logging
 import pytest
 import asyncio
 import base64
@@ -311,10 +312,12 @@ class TestPageInitialization:
             pytest.fail(f"Page initialization raised: {e}")
     
     @pytest.mark.asyncio
-    async def test_session_required(self, config: RuntimeConfig):
-        """Page raises ValueError when session is None."""
-        with pytest.raises(ValueError, match="Session is required"):
+    async def test_session_required(self, config: RuntimeConfig, caplog: pytest.LogCaptureFixture):
+        """Page renders the connection-required state when session is None."""
+        with caplog.at_level(logging.WARNING):
             await inspector.page(session=None, config=config)
+
+        assert "without active SAP session" in caplog.text
     
     def test_flatten_element_tree_creates_list(
         self,

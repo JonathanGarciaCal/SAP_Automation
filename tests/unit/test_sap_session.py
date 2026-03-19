@@ -330,16 +330,22 @@ class TestSessionElementDiscovery:
         mock_queue_manager.call_async.return_value = {
             'id': 'I[:VBELN]',
             'type': 'GuiTextField',
+            'name': 'SalesOrderField',
             'text': 'Sales Order',
             'value': '12345',
             'visible': True,
-            'enabled': True
+            'enabled': True,
+            'x': 10,
+            'y': 20,
+            'width': 120,
+            'height': 24,
         }
         
         result = await session.find_element('I[:VBELN]')
         
-        assert result['id'] == 'I[:VBELN]'
-        assert result['type'] == 'GuiTextField'
+        assert result['element_id'] == 'I[:VBELN]'
+        assert result['element_type'] == 'GuiTextField'
+        assert result['name'] == 'SalesOrderField'
         mock_queue_manager.call_async.assert_called_once()
     
     @pytest.mark.asyncio
@@ -353,6 +359,8 @@ class TestSessionElementDiscovery:
         result = await session.find_elements_by_type('GuiButton')
         
         assert len(result) == 2
+        assert result[0]['element_id'] == 'btn[1]'
+        assert result[0]['element_type'] == 'GuiButton'
         assert result[0]['text'] == 'Save'
         mock_queue_manager.call_async.assert_called_once()
     
@@ -384,6 +392,92 @@ class TestSessionElementDiscovery:
         assert len(result) >= 1
         assert result[0]['element_type'] == 'GuiMainWindow'
         mock_queue_manager.call_async.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_discovery_methods_share_canonical_contract(
+        self,
+        session: Session,
+        mock_queue_manager: MagicMock,
+    ) -> None:
+        """Test that all discovery methods emit the same canonical element keys."""
+        mock_queue_manager.call_async.side_effect = [
+            {
+                'id': 'field1',
+                'type': 'GuiTextField',
+                'name': 'Order',
+                'text': 'Sales Order',
+                'value': '12345',
+                'visible': True,
+                'enabled': True,
+                'x': 10,
+                'y': 20,
+                'width': 120,
+                'height': 24,
+            },
+            [
+                {
+                    'id': 'field1',
+                    'type': 'GuiTextField',
+                    'name': 'Order',
+                    'text': 'Sales Order',
+                    'value': '12345',
+                    'visible': True,
+                    'enabled': True,
+                    'x': 10,
+                    'y': 20,
+                    'width': 120,
+                    'height': 24,
+                }
+            ],
+            {
+                'id': '[/app/con[0]/ses[0]/wnd[0]]',
+                'type': 'GuiMainWindow',
+                'name': 'Main',
+                'text': 'SAP',
+                'children': [
+                    {
+                        'id': 'field1',
+                        'type': 'GuiTextField',
+                        'name': 'Order',
+                        'text': 'Sales Order',
+                        'value': '12345',
+                        'visible': True,
+                        'enabled': True,
+                        'x': 10,
+                        'y': 20,
+                        'width': 120,
+                        'height': 24,
+                        'children': [],
+                    }
+                ],
+            },
+        ]
+
+        direct_match = await session.find_element('field1')
+        type_matches = await session.find_elements_by_type('GuiTextField')
+        tree_matches = await session.get_element_tree()
+
+        expected_keys = {
+            'element_id',
+            'element_type',
+            'name',
+            'text',
+            'x',
+            'y',
+            'width',
+            'height',
+            'visible',
+            'enabled',
+            'value',
+            'parent_id',
+        }
+
+        assert set(direct_match.keys()) == expected_keys
+        assert set(type_matches[0].keys()) == expected_keys
+        assert set(tree_matches[1].keys()) == expected_keys
+        assert direct_match['element_id'] == type_matches[0]['element_id']
+        assert direct_match['element_type'] == tree_matches[1]['element_type']
+        assert tree_matches[1]['parent_id'] == '[/app/con[0]/ses[0]/wnd[0]]'
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -538,6 +632,48 @@ class TestElementTreeWalker:
         assert isinstance(result, ElementInfo)
         assert result.element_id == '[/app/con[0]/ses[0]/wnd[0]]'
         assert result.element_type == 'GuiMainWindow'
+
+    @pytest.mark.asyncio
+    async def test_get_element_tree_normalizes_legacy_flat_keys(self, mock_session: MagicMock) -> None:
+        """Test that legacy flat mock keys are normalized through the shared contract."""
+        mock_session.get_element_tree.return_value = [
+            {
+                'id': '[/app/con[0]/ses[0]/wnd[0]]',
+                'type': 'GuiMainWindow',
+                'name': 'Main',
+                'text': 'SAP',
+                'x': 0,
+                'y': 0,
+                'width': 800,
+                'height': 600,
+                'visible': True,
+                'enabled': True,
+                'value': None,
+                'parent_id': None,
+            },
+            {
+                'id': 'field1',
+                'type': 'GuiTextField',
+                'name': 'Order',
+                'text': 'Sales Order',
+                'x': 0,
+                'y': 30,
+                'width': 100,
+                'height': 20,
+                'visible': True,
+                'enabled': True,
+                'value': None,
+                'parent_id': '[/app/con[0]/ses[0]/wnd[0]]',
+            },
+        ]
+
+        walker = ElementTreeWalker(mock_session)
+        result = await walker.get_element_tree()
+
+        assert result.element_id == '[/app/con[0]/ses[0]/wnd[0]]'
+        assert result.children is not None
+        assert len(result.children) == 1
+        assert result.children[0].element_type == 'GuiTextField'
     
     @pytest.mark.asyncio
     async def test_get_element_tree_caches_result(self, mock_session: MagicMock) -> None:

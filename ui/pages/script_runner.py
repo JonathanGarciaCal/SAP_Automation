@@ -140,7 +140,15 @@ def _render_script_browser(state: _PageState) -> None:
             ],
             'rowData': [],
             'rowSelection': 'single',
-            'defaultColDef': {'resizable': True},
+            'theme': 'balham',
+            'defaultColDef': {
+                'resizable': True,
+                'cellStyle': {
+                    'color': '#111827',
+                    'fontSize': '13px',
+                },
+            },
+            'rowHeight': 32,
         }).classes('w-full text-sm')
         
         def load_scripts(query: str = "") -> None:

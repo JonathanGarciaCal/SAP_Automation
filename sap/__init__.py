@@ -2289,6 +2289,9 @@ import asyncio
 import traceback as tb_module
 from time import time as now_seconds
 
+# Import ReportResult from exporter module (canonical definition) - MUST BE BEFORE ReportRunner
+from sap.exporter import ReportResult
+
 
 class ReportRunner:
     """Execute SAP reports defined in YAML format (Phase 4 Task 2).
@@ -2706,10 +2709,6 @@ class ReportRunner:
         
         logger.debug(f"Clicking button: {step.target}")
         await self.session.click_button(step.target, timeout=step.timeout)
-
-
-# Import ReportResult from exporter module (canonical definition)
-from sap.exporter import ReportResult
 
 
 __all__ = [

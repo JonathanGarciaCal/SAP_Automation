@@ -40,6 +40,7 @@ import logging
 from typing import Any, List, Optional, Callable, Dict
 from dataclasses import dataclass
 
+from sap.element_tree import normalize_flat_element_list
 from sap.performance import BatchOperations
 
 logger = logging.getLogger(__name__)
@@ -564,13 +565,14 @@ class ElementTreeWalker:
         raw_elem: Dict[str, Any],
         include_children: bool = True
     ) -> ElementInfo:
-        """Convert raw element dict from SAP to ElementInfo.
-        
-        Handles both flat dict (with element_id, element_type keys) and legacy
-        nested structure keys (id, type).
+        """Convert a normalized element dict into ElementInfo.
+
+        The canonical inspector/session contract is a flat element dict using
+        element_id, element_type, and parent_id. Nested children are only
+        traversed when this helper is used directly with a nested payload.
         
         Args:
-            raw_elem: Raw element dict from SAP
+            raw_elem: Normalized element dict from SAP/session helpers
             include_children: If True, recursively convert children (if present)
         
         Returns:
@@ -583,10 +585,10 @@ class ElementTreeWalker:
                 child_info = self._convert_to_element_info(child_raw, include_children=True)
                 children.append(child_info)
         
-        # Create ElementInfo from flat or nested dict
+        # Create ElementInfo from the canonical flat contract.
         elem_info = ElementInfo(
-            element_id=raw_elem.get('element_id', raw_elem.get('id', '')),
-            element_type=raw_elem.get('element_type', raw_elem.get('type', 'Unknown')),
+            element_id=str(raw_elem.get('element_id', '')),
+            element_type=str(raw_elem.get('element_type', 'Unknown')),
             name=raw_elem.get('name', ''),
             text=raw_elem.get('text', ''),
             x=int(raw_elem.get('x', 0)),
@@ -636,21 +638,14 @@ class ElementTreeWalker:
             error_msg = "Cannot build element tree: flat_list is empty"
             logger.error(error_msg)
             raise RuntimeError(error_msg)
+
+        normalized_elements = normalize_flat_element_list(flat_list)
         
         # Convert all dicts to ElementInfo objects and index by ID
         elements: Dict[str, ElementInfo] = {}
         orphan_elements: List[ElementInfo] = []  # Elements with parent_id=None
         
-        for elem_dict in flat_list:
-            # Validate that elem_dict is actually a dict
-            if not isinstance(elem_dict, dict):
-                logger.error(
-                    "Skipping non-dict element in flat_list: %s (type: %s)",
-                    elem_dict,
-                    type(elem_dict).__name__
-                )
-                continue
-            
+        for elem_dict in normalized_elements:
             elem_info = self._convert_to_element_info(elem_dict, include_children=False)
             elements[elem_info.element_id] = elem_info
             
@@ -658,13 +653,33 @@ class ElementTreeWalker:
             if elem_info.parent_id is None:
                 orphan_elements.append(elem_info)
         
-        # Find root element: exact match or fallback to first orphan
+        # Find root element: exact match (with or without [] wrappers) or fallback to first orphan
         root = None
-        if root_id in elements:
-            root = elements[root_id]
+        normalized_root_id = root_id
+        bracketless_root_id = root_id[1:-1] if root_id.startswith('[') and root_id.endswith(']') else root_id
+        bracketed_root_id = root_id if root_id.startswith('[') and root_id.endswith(']') else f'[{root_id}]'
+
+        if normalized_root_id in elements:
+            root = elements[normalized_root_id]
             logger.debug(
                 "Using exact root element: %s (type: %s)",
+                normalized_root_id,
+                root.element_type
+            )
+        elif bracketless_root_id in elements:
+            root = elements[bracketless_root_id]
+            logger.debug(
+                "Using normalized root element: %s -> %s (type: %s)",
                 root_id,
+                bracketless_root_id,
+                root.element_type
+            )
+        elif bracketed_root_id in elements:
+            root = elements[bracketed_root_id]
+            logger.debug(
+                "Using normalized root element: %s -> %s (type: %s)",
+                root_id,
+                bracketed_root_id,
                 root.element_type
             )
         elif orphan_elements:
@@ -696,7 +711,7 @@ class ElementTreeWalker:
         
         # Link children to parents via parent_id
         if include_children:
-            for elem_id, elem_info in elements.items():
+            for elem_info in elements.values():
                 if elem_info.parent_id and elem_info.parent_id in elements:
                     parent = elements[elem_info.parent_id]
                     if parent.children is None:
@@ -705,9 +720,9 @@ class ElementTreeWalker:
                         parent.children.append(elem_info)
         
         logger.debug(
-            "Element tree built: root=%s, %d elements cached, %d orphans",
+            "Element tree built: root=%s, %d normalized elements cached, %d orphans",
             root.element_id,
-            len(elements),
+            len(normalized_elements),
             len(orphan_elements)
         )
         

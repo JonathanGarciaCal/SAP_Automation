@@ -8,17 +8,18 @@ sap:
   # Linux/Mac example: "/opt/sap/saplogon.ini" (if using wine or remote)
   logon_path: "C:\\Program Files\\SAP\\FrontEnd\\SAP GUI\\saplogon.ini"
   
-  # SAP username (read from SAP_USERNAME env var if not provided)
-  # username: "demo_user"
-  
-  # SAP password (NEVER hardcode — use SAP_PASSWORD env var)
-  # password: "your_password_here"
+  # Authentication mode (Phase 1: SSO-only)
+  # use_sso: true (required, credential-based login not supported)
   
   # SAP client number
   client: "100"
   
   # Language code
   lang: "EN"
+  
+  # Connection timeout in seconds (for connect_to_sap)
+  # Default: 30 seconds, can be overridden here
+  connection_timeout: 30
 
 # Web Application Configuration
 app:
