@@ -137,20 +137,20 @@ class Session:
         
         try:
             logger.info("Closing session: %s", self._session_id)
-            
-            # Call EndSession on COM worker thread
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiSession.EndSession',
-                session_id=self._session_id
+                operation='close',
+                wrap_error='Failed to close session'
             )
-            
-            self._connected = False
-            logger.info("Session closed successfully: %s", self._session_id)
         
         except Exception as e:
             logger.error("Error closing session: %s", e, exc_info=True)
             self._connected = False
-            raise RuntimeError(f"Failed to close session: {e}")
+            raise
+
+        self._connected = False
+        logger.info("Session closed successfully: %s", self._session_id)
     
     def is_connected(self) -> bool:
         """Check if session is active.
@@ -159,6 +159,52 @@ class Session:
             True if session is connected, False otherwise
         """
         return self._connected
+
+    def _ensure_connected(self) -> None:
+        """Raise if the session is no longer connected."""
+        if not self._connected:
+            raise RuntimeError("Session not connected")
+
+    async def _dispatch(
+        self,
+        method: str,
+        *,
+        operation: str,
+        wrap_error: Optional[str] = None,
+        detect_disconnect: bool = False,
+        require_connected: bool = True,
+        handled_exceptions: tuple[type[Exception], ...] = (Exception,),
+        **kwargs: Any
+    ) -> Any:
+        """Dispatch a session command through QueueManager.call_async()."""
+        if require_connected:
+            self._ensure_connected()
+
+        try:
+            return await self._queue_manager.call_async(
+                method,
+                session_id=self._session_id,
+                **kwargs
+            )
+        except handled_exceptions as error:
+            if detect_disconnect:
+                self._handle_runtime_disconnect(operation, error)
+
+            if wrap_error is None:
+                raise
+
+            raise RuntimeError(f"{wrap_error}: {error}") from error
+
+    @staticmethod
+    def _empty_connection_status() -> Dict[str, str]:
+        """Return the default empty connection status payload."""
+        return {
+            "system": "",
+            "client": "",
+            "user": "",
+            "transaction": "",
+            "screen": "",
+        }
     
     def _handle_runtime_disconnect(self, operation: str, error: Exception) -> None:
         """Handle runtime disconnect detection.
@@ -227,26 +273,23 @@ class Session:
             await session.start_transaction('ME23N')  # Purchase Order Display
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info(
                 "Starting transaction %s on session %s",
                 transaction_code,
                 self._session_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiSession.StartTransaction',
-                session_id=self._session_id,
+                operation='start_transaction',
+                detect_disconnect=True,
                 transaction_code=transaction_code
             )
             
             logger.debug("Transaction %s started", transaction_code)
         
         except Exception as e:
-            self._handle_runtime_disconnect("start_transaction", e)
             logger.error("Failed to start transaction %s: %s", transaction_code, e)
             raise
     
@@ -268,24 +311,22 @@ class Session:
             # Returns: "wnd[0]" or "wnd[1]" for modal dialogs
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug("Getting current screen ID for session %s", self._session_id)
-            
-            screen_id: str = await self._queue_manager.call_async(
+
+            screen_id: str = await self._dispatch(
                 'GuiSession.GetCurrentScreen',
-                session_id=self._session_id
+                operation='get_current_screen_id',
+                wrap_error='Failed to get current screen',
+                detect_disconnect=True
             )
             
             logger.debug("Current screen: %s", screen_id)
             return screen_id
         
-        except Exception as e:
-            self._handle_runtime_disconnect("get_current_screen_id", e)
+        except RuntimeError as e:
             logger.error("Failed to get current screen: %s", e)
-            raise RuntimeError(f"Failed to get current screen: {e}")
+            raise
     
     async def go_back(self) -> None:
         """Go back one screen (press Back button / F3).
@@ -301,21 +342,18 @@ class Session:
             await session.go_back()  # Return to previous screen
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info("Going back on session %s", self._session_id)
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiSession.GoBack',
-                session_id=self._session_id
+                operation='go_back',
+                detect_disconnect=True
             )
             
             logger.debug("Returned to previous screen")
         
         except Exception as e:
-            self._handle_runtime_disconnect("go_back", e)
             logger.error("Failed to go back: %s", e)
             raise
     
@@ -333,21 +371,18 @@ class Session:
             await session.go_home()  # Return to SAP home/menu
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info("Going to SAP home on session %s", self._session_id)
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiSession.GoHome',
-                session_id=self._session_id
+                operation='go_home',
+                detect_disconnect=True
             )
             
             logger.debug("Returned to SAP home")
         
         except Exception as e:
-            self._handle_runtime_disconnect("go_home", e)
             logger.error("Failed to go home: %s", e)
             raise
     
@@ -376,28 +411,26 @@ class Session:
             print(f"Order: {sales_order}")  # Output: Order: 1000001
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Getting field value: %s on session %s",
                 field_id,
                 self._session_id
             )
-            
-            value: Any = await self._queue_manager.call_async(
+
+            value: Any = await self._dispatch(
                 'GuiElement.GetValue',
-                session_id=self._session_id,
+                operation='get_field_value',
+                wrap_error=f'Failed to get field value {field_id}',
                 field_id=field_id
             )
             
             logger.debug("Field %s value: %s", field_id, value)
             return value
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to get field value %s: %s", field_id, e)
-            raise RuntimeError(f"Failed to get field value {field_id}: {e}")
+            raise
     
     async def set_field_value(self, field_id: str, value: Any) -> None:
         """Set a field value on the current screen.
@@ -418,9 +451,6 @@ class Session:
             await session.set_field_value('I[:QTY]', '100')
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info(
                 "Setting field %s = %s on session %s",
@@ -428,19 +458,20 @@ class Session:
                 value,
                 self._session_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiElement.SetValue',
-                session_id=self._session_id,
+                operation='set_field_value',
+                wrap_error=f'Failed to set field {field_id}',
                 field_id=field_id,
                 value=str(value)
             )
             
             logger.debug("Field %s set successfully", field_id)
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to set field %s: %s", field_id, e)
-            raise RuntimeError(f"Failed to set field {field_id}: {e}")
+            raise
     
     async def get_field_property(
         self,
@@ -468,9 +499,6 @@ class Session:
             field_type = await session.get_field_property('I[:FIELD1]', 'Type')
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Getting field property: %s.%s on session %s",
@@ -478,26 +506,25 @@ class Session:
                 property_name,
                 self._session_id
             )
-            
-            prop_value: Any = await self._queue_manager.call_async(
+
+            prop_value: Any = await self._dispatch(
                 'GuiElement.GetProperty',
-                session_id=self._session_id,
+                operation='get_field_property',
+                wrap_error=f'Failed to get field property {field_id}.{property_name}',
                 field_id=field_id,
                 property_name=property_name
             )
             
             return prop_value
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error(
                 "Failed to get field property %s.%s: %s",
                 field_id,
                 property_name,
                 e
             )
-            raise RuntimeError(
-                f"Failed to get field property {field_id}.{property_name}: {e}"
-            )
+            raise
     
     # ─────────────────────────────────────────────────────────────────
     # Control Interactions (4 methods)
@@ -525,27 +552,25 @@ class Session:
             await session.click_button('[/app/btn_ok]')  # Click OK
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info(
                 "Clicking button %s on session %s",
                 button_id,
                 self._session_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiElement.Click',
-                session_id=self._session_id,
+                operation='click_button',
+                wrap_error=f'Failed to click button {button_id}',
                 button_id=button_id
             )
             
             logger.debug("Button %s clicked", button_id)
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to click button %s: %s", button_id, e)
-            raise RuntimeError(f"Failed to click button {button_id}: {e}")
+            raise
     
     async def send_key(self, key_code: int) -> None:
         """Send a virtual key to SAP.
@@ -572,28 +597,26 @@ class Session:
             await session.send_key(12)  # Press F12 (Cancel)
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Sending key %d on session %s",
                 key_code,
                 self._session_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiSession.SendKey',
-                session_id=self._session_id,
+                operation='send_key',
+                wrap_error=f'Failed to send key {key_code}',
+                detect_disconnect=True,
                 key_code=key_code
             )
             
             logger.debug("Key %d sent", key_code)
         
-        except Exception as e:
-            self._handle_runtime_disconnect("send_key", e)
+        except RuntimeError as e:
             logger.error("Failed to send key %d: %s", key_code, e)
-            raise RuntimeError(f"Failed to send key {key_code}: {e}")
+            raise
     
     async def left_click(self, field_id: str) -> None:
         """Left-click an element on the screen.
@@ -613,27 +636,25 @@ class Session:
             await session.left_click('[/app/scr/grid_0]')  # Click grid cell
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Left-clicking element %s on session %s",
                 field_id,
                 self._session_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiElement.LeftClick',
-                session_id=self._session_id,
+                operation='left_click',
+                wrap_error=f'Failed to left-click element {field_id}',
                 field_id=field_id
             )
             
             logger.debug("Element %s left-clicked", field_id)
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to left-click element %s: %s", field_id, e)
-            raise RuntimeError(f"Failed to left-click element {field_id}: {e}")
+            raise
     
     async def right_click(self, field_id: str) -> None:
         """Right-click an element on the screen.
@@ -652,27 +673,25 @@ class Session:
             await session.right_click('[/app/scr/grid_0]')  # Context menu
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Right-clicking element %s on session %s",
                 field_id,
                 self._session_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiElement.RightClick',
-                session_id=self._session_id,
+                operation='right_click',
+                wrap_error=f'Failed to right-click element {field_id}',
                 field_id=field_id
             )
             
             logger.debug("Element %s right-clicked", field_id)
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to right-click element %s: %s", field_id, e)
-            raise RuntimeError(f"Failed to right-click element {field_id}: {e}")
+            raise
     
     # ─────────────────────────────────────────────────────────────────
     # Element Discovery (3 methods)
@@ -710,28 +729,26 @@ class Session:
             print(f"Element type: {elem['type']}, visible: {elem['visible']}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Finding element %s on session %s",
                 path,
                 self._session_id
             )
-            
-            elem_data: Dict[str, Any] = await self._queue_manager.call_async(
+
+            elem_data: Dict[str, Any] = await self._dispatch(
                 'GuiSession.FindElement',
-                session_id=self._session_id,
+                operation='find_element',
+                wrap_error=f'Failed to find element {path}',
                 path=path
             )
             
             logger.debug("Found element %s: %s", path, elem_data.get('type'))
             return elem_data
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to find element %s: %s", path, e)
-            raise RuntimeError(f"Failed to find element {path}: {e}")
+            raise
     
     async def find_elements_by_type(self, element_type: str) -> List[Dict[str, Any]]:
         """Find all elements of a specific type on current screen.
@@ -756,32 +773,30 @@ class Session:
                 print(f"  - {btn['id']}: {btn['text']}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Finding all elements of type %s on session %s",
                 element_type,
                 self._session_id
             )
-            
-            elements: List[Dict[str, Any]] = await self._queue_manager.call_async(
+
+            elements: List[Dict[str, Any]] = await self._dispatch(
                 'GuiSession.FindElementsByType',
-                session_id=self._session_id,
+                operation='find_elements_by_type',
+                wrap_error=f'Failed to find elements by type {element_type}',
                 element_type=element_type
             )
             
             logger.debug("Found %d elements of type %s", len(elements), element_type)
             return elements
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error(
                 "Failed to find elements by type %s: %s",
                 element_type,
                 e
             )
-            raise RuntimeError(f"Failed to find elements by type {element_type}: {e}")
+            raise
     
     async def get_element_tree(
         self,
@@ -829,9 +844,6 @@ class Session:
                 print(f"  [{elem['element_type']}] {elem['name']}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Getting element tree from %s (max_depth=%d, max_elements=%d) on session %s",
@@ -842,9 +854,10 @@ class Session:
             )
             
             # Get nested tree from COM worker thread
-            result: Any = await self._queue_manager.call_async(
+            result: Any = await self._dispatch(
                 'GuiSession.GetElementTree',
-                session_id=self._session_id,
+                operation='get_element_tree',
+                wrap_error='Failed to get element tree',
                 root_id=root_id
             )
             
@@ -891,9 +904,9 @@ class Session:
             logger.debug("Element tree flattened: %d elements", len(flat_list))
             return flat_list
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to get element tree: %s", e)
-            raise RuntimeError(f"Failed to get element tree: {e}")
+            raise
     
     def _flatten_element_tree(
         self,
@@ -1025,9 +1038,6 @@ class Session:
                 print(f"  Row: {row}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info(
                 "Reading grid %s (max_rows=%d) on session %s",
@@ -1035,10 +1045,11 @@ class Session:
                 max_rows,
                 self._session_id
             )
-            
-            rows: List[Dict[str, Any]] = await self._queue_manager.call_async(
+
+            rows: List[Dict[str, Any]] = await self._dispatch(
                 'GuiGrid.ReadGrid',
-                session_id=self._session_id,
+                operation='read_grid',
+                wrap_error=f'Failed to read grid {grid_id}',
                 grid_id=grid_id,
                 max_rows=max_rows
             )
@@ -1046,9 +1057,9 @@ class Session:
             logger.info("Grid read complete: %d rows", len(rows))
             return rows
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to read grid %s: %s", grid_id, e)
-            raise RuntimeError(f"Failed to read grid {grid_id}: {e}")
+            raise
     
     async def get_grid_value(
         self,
@@ -1076,9 +1087,6 @@ class Session:
             print(f"Cell [0,1] = {value}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Getting grid value [%d,%d] from grid %s",
@@ -1086,10 +1094,11 @@ class Session:
                 col,
                 grid_id
             )
-            
-            value: Any = await self._queue_manager.call_async(
+
+            value: Any = await self._dispatch(
                 'GuiGrid.GetValue',
-                session_id=self._session_id,
+                operation='get_grid_value',
+                wrap_error=f'Failed to get grid value [{row},{col}] from {grid_id}',
                 grid_id=grid_id,
                 row=row,
                 col=col
@@ -1097,7 +1106,7 @@ class Session:
             
             return value
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error(
                 "Failed to get grid value [%d,%d] from %s: %s",
                 row,
@@ -1105,9 +1114,7 @@ class Session:
                 grid_id,
                 e
             )
-            raise RuntimeError(
-                f"Failed to get grid value [{row},{col}] from {grid_id}: {e}"
-            )
+            raise
     
     async def set_grid_value(
         self,
@@ -1133,9 +1140,6 @@ class Session:
             await session.set_grid_value('[/app/scr/grid_0]', 0, 1, '12345')
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.info(
                 "Setting grid value [%d,%d] = %s on grid %s",
@@ -1144,10 +1148,11 @@ class Session:
                 value,
                 grid_id
             )
-            
-            await self._queue_manager.call_async(
+
+            await self._dispatch(
                 'GuiGrid.SetValue',
-                session_id=self._session_id,
+                operation='set_grid_value',
+                wrap_error=f'Failed to set grid value [{row},{col}] on {grid_id}',
                 grid_id=grid_id,
                 row=row,
                 col=col,
@@ -1156,7 +1161,7 @@ class Session:
             
             logger.debug("Grid value [%d,%d] set", row, col)
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error(
                 "Failed to set grid value [%d,%d] on %s: %s",
                 row,
@@ -1164,9 +1169,7 @@ class Session:
                 grid_id,
                 e
             )
-            raise RuntimeError(
-                f"Failed to set grid value [{row},{col}] on {grid_id}: {e}"
-            )
+            raise
     
     # ─────────────────────────────────────────────────────────────────
     # Screenshots & State (3 methods)
@@ -1191,23 +1194,21 @@ class Session:
                 f.write(png_bytes)
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug("Taking screenshot on session %s", self._session_id)
-            
-            screenshot_data: bytes = await self._queue_manager.call_async(
+
+            screenshot_data: bytes = await self._dispatch(
                 'GuiSession.TakeScreenshot',
-                session_id=self._session_id
+                operation='take_screenshot',
+                wrap_error='Failed to take screenshot'
             )
             
             logger.debug("Screenshot captured: %d bytes", len(screenshot_data))
             return screenshot_data
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to take screenshot: %s", e)
-            raise RuntimeError(f"Failed to take screenshot: {e}")
+            raise
     
     async def get_focus_element(self) -> str:
         """Get the ID of the currently focused element.
@@ -1225,26 +1226,24 @@ class Session:
             print(f"Focused element: {focused_id}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Getting focused element on session %s",
                 self._session_id
             )
-            
-            elem_id: str = await self._queue_manager.call_async(
+
+            elem_id: str = await self._dispatch(
                 'GuiSession.GetFocusElement',
-                session_id=self._session_id
+                operation='get_focus_element',
+                wrap_error='Failed to get focused element'
             )
             
             logger.debug("Focused element: %s", elem_id)
             return elem_id
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to get focused element: %s", e)
-            raise RuntimeError(f"Failed to get focused element: {e}")
+            raise
     
     async def get_status_bar(self) -> str:
         """Get status bar text from current screen.
@@ -1264,26 +1263,24 @@ class Session:
             print(f"Status: {status}")
             ```
         """
-        if not self._connected:
-            raise RuntimeError("Session not connected")
-        
         try:
             logger.debug(
                 "Getting status bar on session %s",
                 self._session_id
             )
-            
-            status_text: str = await self._queue_manager.call_async(
+
+            status_text: str = await self._dispatch(
                 'GuiSession.GetStatusBar',
-                session_id=self._session_id
+                operation='get_status_bar',
+                wrap_error='Failed to get status bar'
             )
             
             logger.debug("Status bar: %s", status_text)
             return status_text
         
-        except Exception as e:
+        except RuntimeError as e:
             logger.error("Failed to get status bar: %s", e)
-            raise RuntimeError(f"Failed to get status bar: {e}")
+            raise
 
     async def get_connection_status(self) -> Dict[str, str]:
         """Get normalized SAP connection status details.
@@ -1295,29 +1292,19 @@ class Session:
             Dict with keys: system, client, user, transaction, screen
         """
         if not self._connected:
-            return {
-                "system": "",
-                "client": "",
-                "user": "",
-                "transaction": "",
-                "screen": "",
-            }
+            return self._empty_connection_status()
 
         try:
-            status: Dict[str, Any] = await self._queue_manager.call_async(
+            status: Dict[str, Any] = await self._dispatch(
                 'GuiSession.GetConnectionStatus',
-                session_id=self._session_id
+                operation='get_connection_status',
+                detect_disconnect=True,
+                require_connected=False,
+                handled_exceptions=(RuntimeError,)
             )
         except RuntimeError as e:
-            self._handle_runtime_disconnect("get_connection_status", e)
             logger.debug("Failed to get connection status details: %s", e)
-            return {
-                "system": "",
-                "client": "",
-                "user": "",
-                "transaction": "",
-                "screen": "",
-            }
+            return self._empty_connection_status()
 
         return {
             "system": str(status.get("system", "") or ""),
