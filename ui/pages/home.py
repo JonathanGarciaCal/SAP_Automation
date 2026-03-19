@@ -32,7 +32,7 @@ from nicegui import ui
 from config import RuntimeConfig
 from sap.session import Session
 from ui.layout import create_page_layout
-from ui.app import connect_to_sap, disconnect_from_sap, get_app_state
+from ui.app import connect_to_sap, get_app_state
 from utils.sap_systems import get_sap_systems
 
 logger = logging.getLogger(__name__)
@@ -107,43 +107,49 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             with ui.row().classes('w-full gap-4 p-3 bg-gray-50 rounded'):
                 
                 # Connection status indicator
-                status_label = ui.label()
+                connection_status_label = ui.label()
+
+                with ui.column().classes('flex-grow'):
+                    system_display = ui.label('System: N/A').classes('text-sm')
+                    client_display = ui.label('Client: N/A').classes('text-sm')
+                    user_display = ui.label('User: N/A').classes('text-sm')
+                    transaction_display = ui.label('Transaction: N/A').classes('text-sm')
+                    screen_display = ui.label('Screen: (loading)').classes('text-sm')
                 
                 async def update_connection_status() -> None:
                     """Update connection status display."""
                     try:
-                        if session and session.is_connected():
-                            status_label.text = '✅ Connected'
-                            status_label.classes('text-green-600', remove='text-red-600')
-                            
-                            # Try to get current transaction
-                            try:
-                                screen_id = await asyncio.wait_for(
-                                    session.get_current_screen_id(),
-                                    timeout=5.0
-                                )
-                                transaction_display.text = f'Screen: {screen_id}'
-                            except asyncio.TimeoutError:
-                                transaction_display.text = 'Screen: (timeout)'
-                            except Exception as e:
-                                logger.debug("Failed to get screen ID: %s", e)
-                                transaction_display.text = 'Screen: (unavailable)'
+                        active_session = get_active_session() or session
+
+                        # Prefer live session from app state so status updates reflect post-connect state.
+                        if active_session and active_session.is_connected():
+                            connection_status_label.text = '✅ Connected'
+                            connection_status_label.classes('text-green-600', remove='text-red-600')
+
+                            details = await asyncio.wait_for(
+                                active_session.get_connection_status(),
+                                timeout=5.0
+                            )
+
+                            system_display.text = f"System: {details.get('system') or 'N/A'}"
+                            client_display.text = f"Client: {details.get('client') or (config.sap.client if config else 'N/A')}"
+                            user_display.text = f"User: {details.get('user') or 'N/A'}"
+                            transaction_display.text = f"Transaction: {details.get('transaction') or 'N/A'}"
+                            screen_display.text = f"Screen: {details.get('screen') or '(unavailable)'}"
                         else:
-                            status_label.text = '⚠️ Disconnected'
-                            status_label.classes('text-red-600', remove='text-green-600')
-                            transaction_display.text = 'Screen: (no session)'
+                            connection_status_label.text = '⚠️ Disconnected'
+                            connection_status_label.classes('text-red-600', remove='text-green-600')
+                            system_display.text = 'System: N/A'
+                            client_display.text = f"Client: {config.sap.client if config else 'N/A'}"
+                            user_display.text = 'User: N/A'
+                            transaction_display.text = 'Transaction: N/A'
+                            screen_display.text = 'Screen: (no session)'
+                    except asyncio.TimeoutError:
+                        screen_display.text = 'Screen: (timeout)'
                     except Exception as e:
                         logger.error("Error updating connection status: %s", e)
-                        status_label.text = f'❌ Error: {str(e)[:30]}'
-                        status_label.classes('text-red-600')
-                
-                # Info fields
-                with ui.column().classes('flex-grow'):
-                    ui.label(f"Server: {config.sap.logon_path if config else 'N/A'}").classes('text-sm')
-                    ui.label(f"Client: {config.sap.client if config else 'N/A'}").classes('text-sm')
-                    ui.label(f"User: {session._username if session else 'N/A'}").classes('text-sm')
-                
-                transaction_display = ui.label('Screen: (loading)').classes('text-sm')
+                        connection_status_label.text = f'❌ Error: {str(e)[:30]}'
+                        connection_status_label.classes('text-red-600')
                 
                 # Defer initial status update — avoids blocking page render
                 ui.timer(0.1, update_connection_status, once=True)
@@ -226,11 +232,11 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         # Show spinner
                         spinner_row = ui.row().classes('w-full')
                         with spinner_row:
-                            spinner = ui.spinner('dots')
+                            ui.spinner('dots')
                         
                         # Connect with timeout
                         logger.info("Connecting to system %s", system_id)
-                        session = await asyncio.wait_for(
+                        await asyncio.wait_for(
                             connect_to_sap(system_id),
                             timeout=30.0
                         )
@@ -240,6 +246,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         status_label.classes('text-green-600', remove='text-red-600')
                         ui.notify(f'Connected to {system_id}', type='positive')
                         log_operation(f'Connect {system_id}', 'Connected', 'Success')
+                        await update_connection_status()
                         
                         # Clear spinner
                         if spinner_row:
@@ -262,7 +269,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         if spinner_row:
                             try:
                                 spinner_row.clear()
-                            except:
+                            except Exception:
                                 pass
                     
                     finally:
@@ -310,7 +317,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     
                     # Show spinner
                     with spinner_row:
-                        spinner = ui.spinner('dots').set_visibility(True)
+                        ui.spinner('dots').set_visibility(True)
                     
                     # Execute operation
                     try:
@@ -426,7 +433,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     await on_quick_action(
                         'home',
                         'Go Home',
-                        lambda: active_session.go_home()
+                        active_session.go_home
                     )
 
                 async def on_refresh_status_click() -> None:

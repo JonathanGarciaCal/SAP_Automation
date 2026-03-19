@@ -89,7 +89,7 @@ def create_app(config: RuntimeConfig, connection: Optional[SAPConnection] = None
         
         try:
             from ui.pages import home
-            await home.page(session=session, config=config)
+            await home.page(session=_app_state.get('session'), config=config)
         except Exception as e:
             logger.exception("Error rendering home page: %s", e)
             _app_state['error'] = f"Failed to load home page: {str(e)}"
@@ -109,7 +109,7 @@ def create_app(config: RuntimeConfig, connection: Optional[SAPConnection] = None
         
         try:
             from ui.pages import inspector
-            await inspector.page(session=session, config=config)
+            await inspector.page(session=_app_state.get('session'), config=config)
         except Exception as e:
             logger.exception("Error rendering inspector page: %s", e)
             _app_state['error'] = f"Failed to load inspector: {str(e)}"
@@ -129,7 +129,7 @@ def create_app(config: RuntimeConfig, connection: Optional[SAPConnection] = None
         
         try:
             from ui.pages import script_runner
-            await script_runner.page(session=session, config=config)
+            await script_runner.page(session=_app_state.get('session'), config=config)
         except Exception as e:
             logger.exception("Error rendering script runner page: %s", e)
             _app_state['error'] = f"Failed to load script runner: {str(e)}"
@@ -149,7 +149,7 @@ def create_app(config: RuntimeConfig, connection: Optional[SAPConnection] = None
         
         try:
             from ui.pages import reports
-            await reports.page(session=session, config=config)
+            await reports.page(session=_app_state.get('session'), config=config)
         except Exception as e:
             logger.exception("Error rendering reports page: %s", e)
             _app_state['error'] = f"Failed to load reports: {str(e)}"

@@ -34,6 +34,7 @@ import asyncio
 import time
 import subprocess
 import os
+import re
 
 try:
     import win32com.client
@@ -130,13 +131,23 @@ class SAPConnection:
             
             if await self._probe_running_sap(system_id):
                 logger.info("Attached to existing SAP GUI instance for system %s", system_id)
+
+                # Ensure COM worker is available for queued session calls.
+                bridge = SAPBridge()
+                if not bridge.is_running():
+                    logger.info("Starting COM worker thread for attached SAP session")
+                    bridge.start()
+                    await asyncio.sleep(0.5)
+
                 self._connected = True
                 self._last_activity = time.time()
                 self._session = SAPSession(self._queue_manager, system_id=system_id)
                 self._start_heartbeat()
+                self._last_connection_diagnostics["stage"] = "connected"
                 return self._session
             else:
-                self._last_connection_diagnostics["attach_first_error"] = "No running SAP GUI instance found"
+                if not self._last_connection_diagnostics.get("attach_first_error"):
+                    self._last_connection_diagnostics["attach_first_error"] = "No running SAP GUI instance found"
                 logger.debug("No running SAP instance; will launch new one")
             
             # Stage 2: Launcher resolution and launch
@@ -358,16 +369,137 @@ class SAPConnection:
         """
         try:
             logger.debug("Probing for running SAP GUI instance (system=%s)", system_id)
-            
-            # In Phase 2, this will use COM to:
-            # 1. Try win32com.client.GetObject("SAPLOGON.Application")
-            # 2. Check if any sessions exist for the target system
-            # For now, return False (always launch new)
+
+            target_system = self._normalize_system_id(system_id)
+            target_client = self._normalize_client(self.config.client)
+
+            if not target_system:
+                self._last_connection_diagnostics["attach_first_error"] = (
+                    "Cannot probe running SAP sessions: target system is empty after normalization"
+                )
+                return False
+
+            sessions = SAPConnection.get_all_sessions()
+            if not sessions:
+                self._last_connection_diagnostics["attach_first_error"] = (
+                    f"No running SAP sessions found for requested system '{target_system}'"
+                )
+                return False
+
+            matching_without_client: List[Dict[str, Any]] = []
+            matching_system_any_client: List[Dict[str, Any]] = []
+            client_mismatch_samples: List[str] = []
+
+            for session in sessions:
+                session_system = self._normalize_system_id(str(session.get("system", "")))
+                if session_system != target_system:
+                    continue
+
+                session_client = self._normalize_client(session.get("client"))
+
+                # When client is configured, prefer exact match.
+                if target_client:
+                    if session_client == target_client:
+                        logger.debug(
+                            "Attach-first match found: system=%s client=%s",
+                            session_system,
+                            session_client,
+                        )
+                        self._last_connection_diagnostics["attach_first_error"] = None
+                        return True
+
+                    # If session client metadata is unavailable, still allow attach.
+                    if not session_client:
+                        matching_without_client.append(session)
+                    else:
+                        matching_system_any_client.append(session)
+                        client_mismatch_samples.append(session_client)
+                    continue
+
+                # No configured client: any matching system is enough.
+                logger.debug(
+                    "Attach-first system match found without client requirement: system=%s",
+                    session_system,
+                )
+                self._last_connection_diagnostics["attach_first_error"] = None
+                return True
+
+            if matching_without_client:
+                logger.debug(
+                    "Attach-first fallback match found: system=%s with unavailable session client metadata",
+                    target_system,
+                )
+                self._last_connection_diagnostics["attach_first_error"] = None
+                return True
+
+            if matching_system_any_client:
+                unique_clients = sorted(set(client_mismatch_samples))
+                logger.warning(
+                    "Attach-first fallback using system-only match for %s; configured client=%s, available clients=%s",
+                    target_system,
+                    target_client,
+                    unique_clients,
+                )
+                self._last_connection_diagnostics["attach_first_error"] = None
+                return True
+
+            if target_client and client_mismatch_samples:
+                unique_clients = sorted(set(client_mismatch_samples))
+                self._last_connection_diagnostics["attach_first_error"] = (
+                    f"Found running sessions for system '{target_system}' but clients did not match "
+                    f"requested client '{target_client}' (available: {unique_clients})"
+                )
+            else:
+                self._last_connection_diagnostics["attach_first_error"] = (
+                    f"No running SAP sessions matched requested system '{target_system}'"
+                )
             return False
         
         except Exception as e:
+            self._last_connection_diagnostics["attach_first_error"] = (
+                f"Attach-first probe failed: {e}"
+            )
             logger.debug("Attach-first probe failed: %s", e)
             return False
+
+    @staticmethod
+    def _normalize_system_id(system_id: str) -> str:
+        """Normalize system ID for robust matching.
+
+        Handles decorated labels like "PAG - North American AG Production (SSO)"
+        by extracting the leading system code.
+
+        Args:
+            system_id: Raw system identifier from UI/session metadata.
+
+        Returns:
+            Normalized uppercase system code.
+        """
+        if not system_id:
+            return ""
+
+        normalized = system_id.strip()
+        normalized = re.split(r"\s+-\s+", normalized, maxsplit=1)[0]
+        normalized = re.sub(r"\s*\([^)]*\)\s*$", "", normalized)
+        return normalized.strip().upper()
+
+    @staticmethod
+    def _normalize_client(client: Optional[Any]) -> str:
+        """Normalize SAP client for case-insensitive/whitespace-safe comparison.
+
+        Args:
+            client: Raw client value from config/session metadata.
+
+        Returns:
+            Normalized uppercase client value, or empty string if unavailable.
+        """
+        if client is None:
+            return ""
+
+        value = str(client).strip()
+        if not value:
+            return ""
+        return value.upper()
     
     async def _launch_sap_gui(self, launcher_path: str, system_id: str) -> None:
         """Launch SAP GUI application with system connection.

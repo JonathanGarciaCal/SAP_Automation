@@ -1284,3 +1284,45 @@ class Session:
         except Exception as e:
             logger.error("Failed to get status bar: %s", e)
             raise RuntimeError(f"Failed to get status bar: {e}")
+
+    async def get_connection_status(self) -> Dict[str, str]:
+        """Get normalized SAP connection status details.
+
+        Returns a consistent structure suitable for UI status panels.
+        All values are strings and default to empty string when unavailable.
+
+        Returns:
+            Dict with keys: system, client, user, transaction, screen
+        """
+        if not self._connected:
+            return {
+                "system": "",
+                "client": "",
+                "user": "",
+                "transaction": "",
+                "screen": "",
+            }
+
+        try:
+            status: Dict[str, Any] = await self._queue_manager.call_async(
+                'GuiSession.GetConnectionStatus',
+                session_id=self._session_id
+            )
+        except RuntimeError as e:
+            self._handle_runtime_disconnect("get_connection_status", e)
+            logger.debug("Failed to get connection status details: %s", e)
+            return {
+                "system": "",
+                "client": "",
+                "user": "",
+                "transaction": "",
+                "screen": "",
+            }
+
+        return {
+            "system": str(status.get("system", "") or ""),
+            "client": str(status.get("client", "") or ""),
+            "user": str(status.get("user", "") or ""),
+            "transaction": str(status.get("transaction", "") or ""),
+            "screen": str(status.get("screen", "") or ""),
+        }

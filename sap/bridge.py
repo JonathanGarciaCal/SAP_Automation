@@ -431,6 +431,23 @@ class SAPBridge:
                 window = session.FindById("wnd[0]")
                 return str(window.Id)
 
+            if method == "GuiSession.GetConnectionStatus":
+                info = getattr(session, "Info", None)
+                screen_id = ""
+                try:
+                    screen_id = str(session.FindById("wnd[0]").Id)
+                except Exception:
+                    # Screen ID is optional for status rendering.
+                    screen_id = ""
+
+                return {
+                    "system": str(getattr(info, "SystemName", "") or ""),
+                    "client": str(getattr(info, "Client", "") or ""),
+                    "user": str(getattr(info, "User", "") or ""),
+                    "transaction": str(getattr(info, "Transaction", "") or ""),
+                    "screen": screen_id,
+                }
+
             if method == "GuiSession.EndSession":
                 # Graceful close for current session.
                 try:
