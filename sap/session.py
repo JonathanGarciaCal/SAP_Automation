@@ -49,6 +49,11 @@ import logging
 from typing import Any, List, Dict, Optional
 from dataclasses import dataclass
 
+from sap.element_tree import (
+    normalize_element_payload,
+    normalize_element_tree_payload,
+    normalize_flat_element_list,
+)
 from sap.queue_manager import QueueManager
 
 logger = logging.getLogger(__name__)
@@ -707,8 +712,9 @@ class Session:
         
         Returns:
             Dict with element metadata: {
-                'id': element ID,
-                'type': element type (e.g., 'GuiTextField'),
+                'element_id': element ID,
+                'element_type': element type (e.g., 'GuiTextField'),
+                'name': element name or label,
                 'text': display text,
                 'value': current value if applicable,
                 'visible': visibility flag,
@@ -716,7 +722,8 @@ class Session:
                 'x': X position,
                 'y': Y position,
                 'width': width,
-                'height': height
+                'height': height,
+                'parent_id': parent element ID if available
             }
         
         Raises:
@@ -726,7 +733,10 @@ class Session:
         Example:
             ```python
             elem = await session.find_element('I[:VBELN]')
-            print(f"Element type: {elem['type']}, visible: {elem['visible']}")
+            print(
+                f"Element type: {elem['element_type']}, "
+                f"visible: {elem['visible']}"
+            )
             ```
         """
         try:
@@ -742,11 +752,17 @@ class Session:
                 wrap_error=f'Failed to find element {path}',
                 path=path
             )
+
+            normalized_element = normalize_element_payload(elem_data)
             
-            logger.debug("Found element %s: %s", path, elem_data.get('type'))
-            return elem_data
+            logger.debug(
+                "Found element %s: %s",
+                path,
+                normalized_element.get('element_type')
+            )
+            return normalized_element
         
-        except RuntimeError as e:
+        except (RuntimeError, TypeError, ValueError) as e:
             logger.error("Failed to find element %s: %s", path, e)
             raise
     
@@ -759,7 +775,8 @@ class Session:
             element_type: Element type to search for
         
         Returns:
-            List of element metadata dicts (see find_element for dict format)
+            List of canonical element metadata dicts using the same contract as
+            find_element() and get_element_tree().
         
         Raises:
             RuntimeError: If session not connected
@@ -770,7 +787,7 @@ class Session:
             buttons = await session.find_elements_by_type('GuiButton')
             print(f"Found {len(buttons)} buttons")
             for btn in buttons:
-                print(f"  - {btn['id']}: {btn['text']}")
+                print(f"  - {btn['element_id']}: {btn['text']}")
             ```
         """
         try:
@@ -786,11 +803,17 @@ class Session:
                 wrap_error=f'Failed to find elements by type {element_type}',
                 element_type=element_type
             )
+
+            normalized_elements = normalize_flat_element_list(elements)
             
-            logger.debug("Found %d elements of type %s", len(elements), element_type)
-            return elements
+            logger.debug(
+                "Found %d elements of type %s",
+                len(normalized_elements),
+                element_type
+            )
+            return normalized_elements
         
-        except RuntimeError as e:
+        except (RuntimeError, TypeError, ValueError) as e:
             logger.error(
                 "Failed to find elements by type %s: %s",
                 element_type,
@@ -806,9 +829,9 @@ class Session:
     ) -> List[Dict[str, Any]]:
         """Get all elements on screen as a flattened list with parent references.
         
-        Recursively walks the SAP element hierarchy and returns a flat list.
-        Each element dict contains exactly 10 keys with parent_id back-reference
-        for tree reconstruction.
+        Returns a normalized flat list describing the SAP element hierarchy.
+        Each element dict contains the canonical Session element keys plus a
+        parent_id back-reference for tree reconstruction.
         
         Args:
             root_id: Root element ID (default: main window)
@@ -860,150 +883,23 @@ class Session:
                 wrap_error='Failed to get element tree',
                 root_id=root_id
             )
-            
-            # Type guard: detect if result is already a flat list
-            # (defensive: should always be nested dict from real SAP)
-            if isinstance(result, list):
-                logger.debug(
-                    "Result is already a flat list (%d elements), returning as-is",
-                    len(result)
-                )
-                # Validate that all items are dicts with required keys
-                bad_items = []
-                for i, item in enumerate(result):
-                    if not isinstance(item, dict):
-                        bad_items.append((i, type(item).__name__, str(item)[:50]))
-                
-                if bad_items:
-                    error_msg = (
-                        f"Flat list validation failed: {len(bad_items)} non-dict items found. "
-                        f"First 3: {bad_items[:3]}"
-                    )
-                    logger.error(error_msg)
-                    raise TypeError(error_msg)
-                
-                logger.debug(
-                    "Flat list validated: all %d items are dicts. "
-                    "Element IDs: %s",
-                    len(result),
-                    [item.get('element_id', item.get('id', '?'))[:20] for item in result[:5]]
-                )
-                return result
-            
-            # Flatten the tree into a list (normal case)
-            flat_list: List[Dict[str, Any]] = []
-            self._flatten_element_tree(
+
+            flat_list = normalize_element_tree_payload(
                 result,
-                flat_list,
-                parent_id=None,
-                current_depth=0,
                 max_depth=max_depth,
-                max_elements=max_elements
+                max_elements=max_elements,
             )
-            
-            logger.debug("Element tree flattened: %d elements", len(flat_list))
+
+            logger.debug(
+                "Element tree normalized from %s payload: %d elements",
+                type(result).__name__,
+                len(flat_list),
+            )
             return flat_list
-        
-        except RuntimeError as e:
+
+        except (RuntimeError, TypeError, ValueError) as e:
             logger.error("Failed to get element tree: %s", e)
             raise
-    
-    def _flatten_element_tree(
-        self,
-        elem: Dict[str, Any],
-        result: List[Dict[str, Any]],
-        parent_id: Optional[str] = None,
-        current_depth: int = 0,
-        max_depth: int = 20,
-        max_elements: int = 5000
-    ) -> None:
-        """Flatten nested element tree into list with parent references.
-        
-        Args:
-            elem: Current element dict (from nested tree). MUST be a dict, never a list.
-            result: Accumulator list for flattened elements
-            parent_id: Parent element ID (None for root)
-            current_depth: Current recursion depth
-            max_depth: Maximum depth before stopping recursion
-            max_elements: Maximum elements to add to result
-        
-        Raises:
-            TypeError: If elem is not a dict (indicates malformed tree structure)
-        """
-        # Type guard: elem MUST be a dict, never a list
-        if not isinstance(elem, dict):
-            raise TypeError(
-                f"_flatten_element_tree: Expected dict, got {type(elem).__name__}. "
-                f"This indicates malformed COM result or test mock. "
-                f"Value: {elem}"
-            )
-        
-        # Safety checks
-        if len(result) >= max_elements:
-            logger.warning(
-                "Element count limit (%d) reached, stopping tree walk",
-                max_elements
-            )
-            return
-        
-        if current_depth > max_depth:
-            logger.warning(
-                "Max depth (%d) reached, stopping tree walk",
-                max_depth
-            )
-            return
-        
-        # Extract element properties with defaults
-        elem_id = str(elem.get('id', elem.get('element_id', '')))
-        elem_type = str(elem.get('type', elem.get('element_type', 'Unknown')))
-        name = str(elem.get('name', ''))
-        text = str(elem.get('text', ''))
-        x = int(elem.get('x', 0))
-        y = int(elem.get('y', 0))
-        width = int(elem.get('width', 0))
-        height = int(elem.get('height', 0))
-        visible = bool(elem.get('visible', True))
-        enabled = bool(elem.get('enabled', True))
-        value = elem.get('value', None)
-        
-        # Build flattened element dict with exactly 10 required keys
-        flat_elem = {
-            'element_id': elem_id,
-            'element_type': elem_type,
-            'name': name,
-            'text': text,
-            'x': x,
-            'y': y,
-            'width': width,
-            'height': height,
-            'visible': visible,
-            'enabled': enabled,
-            'value': value,
-            'parent_id': parent_id
-        }
-        
-        result.append(flat_elem)
-        
-        # Recurse on children
-        children = elem.get('children', [])
-        if not isinstance(children, list):
-            logger.warning(
-                "Expected 'children' to be a list, got %s for element %s. Skipping children.",
-                type(children).__name__,
-                elem_id
-            )
-            return
-        
-        for child in children:
-            if len(result) < max_elements:
-                self._flatten_element_tree(
-                    child,
-                    result,
-                    parent_id=elem_id,
-                    current_depth=current_depth + 1,
-                    max_depth=max_depth,
-                    max_elements=max_elements
-                )
     
     # ─────────────────────────────────────────────────────────────────
     # Data Extraction (3 methods)

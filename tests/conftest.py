@@ -246,16 +246,76 @@ def mock_session_async() -> MagicMock:
     session.take_screenshot = AsyncMock(return_value=b'fake_image_data')
     
     # ─────────────────────────────────────────────────────────────
-    # Tree Operations (3 methods)
+    # Tree Operations
     # ─────────────────────────────────────────────────────────────
+    canonical_tree = [
+        {
+            'element_id': '[/root]',
+            'element_type': 'GuiMainWindow',
+            'name': 'root',
+            'text': 'Root Element',
+            'value': None,
+            'x': 0,
+            'y': 0,
+            'width': 800,
+            'height': 600,
+            'visible': True,
+            'enabled': True,
+            'parent_id': None,
+        },
+        {
+            'element_id': '[/root/child1]',
+            'element_type': 'GuiTextField',
+            'name': 'child_1',
+            'text': 'Child 1',
+            'value': None,
+            'x': 10,
+            'y': 20,
+            'width': 100,
+            'height': 24,
+            'visible': True,
+            'enabled': True,
+            'parent_id': '[/root]',
+        },
+        {
+            'element_id': '[/root/child2]',
+            'element_type': 'GuiButton',
+            'name': 'child_2',
+            'text': 'Child 2',
+            'value': None,
+            'x': 120,
+            'y': 20,
+            'width': 100,
+            'height': 24,
+            'visible': True,
+            'enabled': True,
+            'parent_id': '[/root]',
+        },
+    ]
+    session.get_element_tree = AsyncMock(return_value=canonical_tree)
+
+    # Retain a legacy nested alias for older tests that still exercise adapter code.
     session.get_tree_data = AsyncMock(return_value={
-        'root': {
-            'name': 'Root Element',
-            'children': [
-                {'name': 'Child 1', 'type': 'FIELD'},
-                {'name': 'Child 2', 'type': 'BUTTON'},
-            ]
-        }
+        'id': '[/root]',
+        'type': 'GuiMainWindow',
+        'name': 'root',
+        'text': 'Root Element',
+        'children': [
+            {
+                'id': '[/root/child1]',
+                'type': 'GuiTextField',
+                'name': 'child_1',
+                'text': 'Child 1',
+                'children': [],
+            },
+            {
+                'id': '[/root/child2]',
+                'type': 'GuiButton',
+                'name': 'child_2',
+                'text': 'Child 2',
+                'children': [],
+            },
+        ],
     })
     session.click_tree_item = AsyncMock(return_value=None)
     session.expand_tree_node = AsyncMock(return_value=None)
