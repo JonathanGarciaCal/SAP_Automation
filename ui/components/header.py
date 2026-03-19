@@ -97,15 +97,11 @@ def render(
                     status_indicator.text = '? Unknown'
                     status_indicator.classes('text-yellow-300')
             
-            # Initial status update
-            try:
-                asyncio.create_task(update_status())
-            except RuntimeError:
-                # No event loop in test context
-                pass
+            # Initial status update (once=True fires after render, keeps NiceGUI slot context)
+            ui.timer(0, update_status, once=True)
             
             # Poll status every 5 seconds
-            ui.timer(5.0, lambda: asyncio.create_task(update_status()) if asyncio.get_event_loop().is_running() else None)
+            ui.timer(5.0, update_status)
             
             # User name
             ui.label(username).classes('text-white font-semibold')

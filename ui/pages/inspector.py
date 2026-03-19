@@ -71,7 +71,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         return
     
     logger.info("Rendering Screen Inspector page")
-    
+
     # State management
     state = {
         'screenshot_bytes': None,
@@ -82,6 +82,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         'last_error': None,
         'search_task': None,  # Track pending search debounce task
         'original_screenshot_bytes': None,  # Store original for re-highlighting
+        'tree_loading': False,  # Prevent overlapping tree fetches
     }
     
     with create_page_layout(title='Screen Inspector', show_sidebar=True, show_header=True):
@@ -101,44 +102,51 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         # ─────────────────────────────────────────────────────────
         # Main Layout: Screenshot (left) + Grid (right)
         # ─────────────────────────────────────────────────────────
-        with ui.row().classes('w-full flex-grow gap-4'):
+        with ui.row().classes('w-full flex-grow gap-4 items-stretch'):
             
             # Left side: Screenshot display
-            with ui.column().classes('w-3/5 gap-2'):
+            with ui.column().classes('w-1/2 gap-2'):
                 ui.label('Screenshot').classes('text-body1 font-semibold')
                 
-                screenshot_container = ui.column().classes('w-full bg-gray-100 p-2 rounded')
+                screenshot_container = ui.column().classes('w-full bg-gray-100 p-2 rounded').style('min-height: 70vh;')
                 with screenshot_container:
-                    screenshot_image = ui.image().classes('w-full max-h-96 object-contain')
+                    screenshot_image = ui.image().classes('w-full object-contain').style('max-height: 68vh;')
                     screenshot_label = ui.label('No screenshot captured yet').classes(
                         'text-gray-500 text-center py-8'
                     )
             
             # Right side: Element grid
-            with ui.column().classes('w-2/5 gap-2'):
+            with ui.column().classes('w-1/2 gap-2'):
                 # Header with label and match count
                 with ui.row().classes('w-full items-center justify-between'):
                     ui.label('Elements').classes('text-body1 font-semibold')
                     match_count = ui.label('0 / 0').classes('text-sm text-gray-600')
                 
-                # Create AG-Grid table with proper columns
-                grid_columns = [
-                    {'field': 'element_id', 'headerName': 'ID', 'width': 150, 'filter': 'agTextColumnFilter', 'sortable': True},
-                    {'field': 'element_type', 'headerName': 'Type', 'width': 120, 'filter': 'agTextColumnFilter', 'sortable': True},
-                    {'field': 'text', 'headerName': 'Text', 'width': 150, 'filter': 'agTextColumnFilter', 'sortable': True},
-                    {'field': 'x', 'headerName': 'X', 'width': 50, 'type': 'number', 'sortable': True},
-                    {'field': 'y', 'headerName': 'Y', 'width': 50, 'type': 'number', 'sortable': True},
-                    {'field': 'visible', 'headerName': 'Visible', 'width': 70, 'type': 'boolean'},
-                    {'field': 'enabled', 'headerName': 'Enabled', 'width': 70, 'type': 'boolean'},
-                ]
-                
+                # AG Grid is used explicitly to avoid table backend mismatches across NiceGUI versions.
                 element_grid = ui.aggrid({
-                    'columnDefs': grid_columns,
+                    'columnDefs': [
+                        {'field': 'element_id', 'headerName': 'ID', 'sortable': True, 'filter': True, 'minWidth': 220},
+                        {'field': 'element_type', 'headerName': 'Type', 'sortable': True, 'filter': True, 'minWidth': 140},
+                        {'field': 'text', 'headerName': 'Text', 'sortable': True, 'filter': True, 'flex': 1, 'minWidth': 160},
+                        {'field': 'x', 'headerName': 'X', 'sortable': True, 'filter': True, 'width': 90},
+                        {'field': 'y', 'headerName': 'Y', 'sortable': True, 'filter': True, 'width': 90},
+                        {'field': 'visible', 'headerName': 'Visible', 'sortable': True, 'filter': True, 'width': 110},
+                        {'field': 'enabled', 'headerName': 'Enabled', 'sortable': True, 'filter': True, 'width': 110},
+                    ],
                     'rowData': state['elements_list'],
-                    'defaultColDef': {'resizable': True, 'flex': 1},
+                    'rowSelection': 'single',
+                    'theme': 'balham',
+                    'defaultColDef': {
+                        'resizable': True,
+                        'cellStyle': {
+                            'color': '#111827',
+                            'fontSize': '13px',
+                        },
+                    },
+                    'rowHeight': 32,
                     'pagination': True,
-                    'paginationPageSize': 20,
-                }).classes('min-h-96')
+                    'paginationPageSize': 100,
+                }).classes('w-full text-sm').style('height: 70vh;')
         
         # ─────────────────────────────────────────────────────────
         # Property panel (below grid)
@@ -184,6 +192,14 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 search_input.value = ''
                 state['selected_element_id'] = None
                 properties_panel.text = '(No element selected)'
+
+                # Guard against overlapping refresh/capture calls that can cause grid render glitches.
+                if state['tree_loading']:
+                    ui.notify('Tree update already in progress', type='warning')
+                    logger.debug("Capture skipped: tree update already in progress")
+                    return
+                state['tree_loading'] = True
+                refresh_button.enabled = False
                 
                 logger.info("Capturing SAP screen and element tree")
                 
@@ -210,7 +226,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 try:
                     tree = await asyncio.wait_for(
                         state['walker'].get_element_tree(refresh=True),
-                        timeout=5.0
+                        timeout=60.0
                     )
                     state['element_tree'] = tree
                     
@@ -250,7 +266,9 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 error_banner.classes(remove='hidden')
                 logger.error("Error capturing screen: %s", e, exc_info=True)
             finally:
+                state['tree_loading'] = False
                 capture_button.enabled = True
+                refresh_button.enabled = True
                 capture_spinner.classes(add='hidden')
         
         async def refresh_tree() -> None:
@@ -264,7 +282,14 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             5. Re-enable button in finally block
             """
             try:
+                if state['tree_loading']:
+                    ui.notify('Tree update already in progress', type='warning')
+                    logger.debug("Refresh skipped: tree update already in progress")
+                    return
+
+                state['tree_loading'] = True
                 refresh_button.enabled = False
+                capture_button.enabled = False
                 error_banner.classes(add='hidden')
                 
                 if not state['screenshot_bytes']:
@@ -276,7 +301,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 
                 tree = await asyncio.wait_for(
                     state['walker'].get_element_tree(refresh=True),
-                    timeout=5.0
+                    timeout=60.0
                 )
                 state['element_tree'] = tree
                 state['elements_list'] = _flatten_element_tree(tree)
@@ -294,7 +319,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 logger.info("Tree refreshed: %d elements", len(state['elements_list']))
             
             except asyncio.TimeoutError:
-                error_label.text = '⚠️ Tree refresh timed out (>5s)'
+                error_label.text = '⚠️ Tree refresh timed out (>60s)'
                 error_banner.classes(remove='hidden')
                 logger.error("Timeout during refresh")
             except Exception as e:
@@ -303,7 +328,9 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 error_banner.classes(remove='hidden')
                 logger.error("Error refreshing tree: %s", e)
             finally:
+                state['tree_loading'] = False
                 refresh_button.enabled = True
+                capture_button.enabled = True
         
         async def filter_elements_debounced(search_term: str) -> None:
             """Task 6a: Filter grid by search term with 300ms debounce.
@@ -317,41 +344,42 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             # Cancel previous pending search
             if state['search_task']:
                 state['search_task'].cancel()
-            
+
             async def do_search() -> None:
                 try:
                     await asyncio.sleep(0.3)  # Debounce delay
-                    
+
                     if not search_term:
-                        element_grid.options['rowData'] = state['elements_list']
-                        filtered_count = len(state['elements_list'])
+                        filtered_rows = state['elements_list']
                     else:
                         search_lower = search_term.lower()
-                        filtered = [
-                            elem for elem in state['elements_list']
-                            if search_lower in elem['element_id'].lower() or
-                               search_lower in elem['element_type'].lower() or
-                               search_lower in elem.get('text', '').lower()
-                        ]
-                        element_grid.options['rowData'] = filtered
-                        filtered_count = len(filtered)
-                    
+                        filtered_rows = []
+                        for elem in state['elements_list']:
+                            if (
+                                search_lower in elem['element_id'].lower()
+                                or search_lower in elem['element_type'].lower()
+                                or search_lower in elem.get('text', '').lower()
+                            ):
+                                filtered_rows.append(elem)
+
+                    element_grid.options['rowData'] = filtered_rows
+                    filtered_count = len(filtered_rows)
                     element_grid.update()
-                    
+
                     # Update match count: "filtered / total"
                     total_count = len(state['elements_list'])
                     match_count.text = f'{filtered_count} / {total_count} elements'
-                    
+
                     logger.debug(
                         "Search filtered: %d / %d elements (query='%s')",
                         filtered_count,
                         total_count,
                         search_term
                     )
-                
+
                 except asyncio.CancelledError:
                     logger.debug("Search debounce cancelled")
-            
+
             # Schedule new search task
             state['search_task'] = asyncio.create_task(do_search())
         
@@ -474,18 +502,20 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         # Wire up event handlers
         # ─────────────────────────────────────────────────────────
         
-        capture_button.on_click(lambda: asyncio.create_task(capture_screenshot()))
-        refresh_button.on_click(lambda: asyncio.create_task(refresh_tree()))
-        search_input.on_value_change(lambda e: asyncio.create_task(filter_elements_debounced(e.value)))
+        capture_button.on_click(capture_screenshot)
+        refresh_button.on_click(refresh_tree)
+        search_input.on_value_change(lambda e: filter_elements_debounced(e.value))
         
-        # AG-Grid row selection: cellClicked event passes row data in args.data
         async def on_cell_clicked(args):
-            """Handle cell click in element grid to select row."""
-            if args and hasattr(args, 'data') and args.data:
-                await on_element_selected([args.data])
+            """Handle row click in AG Grid to select row."""
+            row_data = None
+            if args and hasattr(args, 'data') and isinstance(args.data, dict):
+                row_data = args.data
+            if row_data:
+                await on_element_selected([row_data])
             else:
                 await on_element_selected([])
-        
+
         element_grid.on('cellClicked', on_cell_clicked)
 
 

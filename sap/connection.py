@@ -136,8 +136,12 @@ class SAPConnection:
                 bridge = SAPBridge()
                 if not bridge.is_running():
                     logger.info("Starting COM worker thread for attached SAP session")
-                    bridge.start()
-                    await asyncio.sleep(0.5)
+                    try:
+                        bridge.start(wait_for_com_ready=True, timeout_sec=15.0)
+                    except RuntimeError as e:
+                        self._last_connection_diagnostics["error"] = f"Failed to initialize COM bridge: {e}"
+                        self._last_connection_diagnostics["stage"] = "connection_failed"
+                        raise RuntimeError(f"COM bridge initialization failed: {e}") from e
 
                 self._connected = True
                 self._last_activity = time.time()
@@ -171,8 +175,12 @@ class SAPConnection:
             bridge = SAPBridge()
             if not bridge.is_running():
                 logger.info("Starting COM worker thread")
-                bridge.start()
-                await asyncio.sleep(0.5)
+                try:
+                    bridge.start(wait_for_com_ready=True, timeout_sec=15.0)
+                except RuntimeError as e:
+                    self._last_connection_diagnostics["error"] = f"Failed to initialize COM bridge: {e}"
+                    self._last_connection_diagnostics["stage"] = "connection_failed"
+                    raise RuntimeError(f"COM bridge initialization failed: {e}") from e
             
             # Create Session stub (Phase 2 will add actual COM calls)
             self._sap_logon = object()  # Placeholder

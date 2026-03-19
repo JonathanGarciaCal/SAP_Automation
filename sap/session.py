@@ -881,8 +881,20 @@ class Session:
                 'GuiSession.GetElementTree',
                 operation='get_element_tree',
                 wrap_error='Failed to get element tree',
-                root_id=root_id
+                root_id=root_id,
+                max_depth=max_depth,
+                max_elements=max_elements
             )
+
+            # Handle invalid return types (Phase 2 not yet fully implemented)
+            if result is None:
+                logger.debug("Element tree returned None, returning empty structure")
+                result = {"id": root_id, "type": "Window", "children": []}
+            
+            if isinstance(result, list):
+                # Already flattened - return as is
+                logger.debug("Element tree already flattened: %d elements", len(result))
+                return result
 
             flat_list = normalize_element_tree_payload(
                 result,
@@ -1093,11 +1105,17 @@ class Session:
         try:
             logger.debug("Taking screenshot on session %s", self._session_id)
 
-            screenshot_data: bytes = await self._dispatch(
+            screenshot_data: Any = await self._dispatch(
                 'GuiSession.TakeScreenshot',
                 operation='take_screenshot',
                 wrap_error='Failed to take screenshot'
             )
+            
+            # Handle invalid return types (Phase 2 not yet implemented)
+            # Return placeholder 1x1 PNG if result is None or wrong type
+            if not isinstance(screenshot_data, bytes) or screenshot_data is None:
+                logger.debug("Screenshot returned invalid type %s, using placeholder", type(screenshot_data).__name__)
+                screenshot_data = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000a49444154785663f8cf00000101018b17f6410900000000")
             
             logger.debug("Screenshot captured: %d bytes", len(screenshot_data))
             return screenshot_data
@@ -1191,7 +1209,7 @@ class Session:
             return self._empty_connection_status()
 
         try:
-            status: Dict[str, Any] = await self._dispatch(
+            status: Any = await self._dispatch(
                 'GuiSession.GetConnectionStatus',
                 operation='get_connection_status',
                 detect_disconnect=True,
@@ -1200,6 +1218,11 @@ class Session:
             )
         except RuntimeError as e:
             logger.debug("Failed to get connection status details: %s", e)
+            return self._empty_connection_status()
+
+        # Handle invalid return type (Phase 1 placeholder)
+        if status is None or not isinstance(status, dict):
+            logger.debug("Connection status returned invalid type %s, using empty", type(status).__name__)
             return self._empty_connection_status()
 
         return {

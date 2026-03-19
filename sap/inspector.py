@@ -653,13 +653,33 @@ class ElementTreeWalker:
             if elem_info.parent_id is None:
                 orphan_elements.append(elem_info)
         
-        # Find root element: exact match or fallback to first orphan
+        # Find root element: exact match (with or without [] wrappers) or fallback to first orphan
         root = None
-        if root_id in elements:
-            root = elements[root_id]
+        normalized_root_id = root_id
+        bracketless_root_id = root_id[1:-1] if root_id.startswith('[') and root_id.endswith(']') else root_id
+        bracketed_root_id = root_id if root_id.startswith('[') and root_id.endswith(']') else f'[{root_id}]'
+
+        if normalized_root_id in elements:
+            root = elements[normalized_root_id]
             logger.debug(
                 "Using exact root element: %s (type: %s)",
+                normalized_root_id,
+                root.element_type
+            )
+        elif bracketless_root_id in elements:
+            root = elements[bracketless_root_id]
+            logger.debug(
+                "Using normalized root element: %s -> %s (type: %s)",
                 root_id,
+                bracketless_root_id,
+                root.element_type
+            )
+        elif bracketed_root_id in elements:
+            root = elements[bracketed_root_id]
+            logger.debug(
+                "Using normalized root element: %s -> %s (type: %s)",
+                root_id,
+                bracketed_root_id,
                 root.element_type
             )
         elif orphan_elements:
@@ -691,7 +711,7 @@ class ElementTreeWalker:
         
         # Link children to parents via parent_id
         if include_children:
-            for elem_id, elem_info in elements.items():
+            for elem_info in elements.values():
                 if elem_info.parent_id and elem_info.parent_id in elements:
                     parent = elements[elem_info.parent_id]
                     if parent.children is None:
