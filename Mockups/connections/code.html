@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Connections - Digital Foreman</title>
+<!-- Google Fonts: Plus Jakarta Sans -->
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Material Symbols Outlined -->
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "surface": "#fbf9f8",
+              "on-secondary-container": "#656464",
+              "tertiary-fixed": "#ffe24a",
+              "on-tertiary-fixed-variant": "#524600",
+              "on-tertiary-fixed": "#211b00",
+              "secondary-fixed": "#e4e2e1",
+              "secondary": "#5f5e5e",
+              "tertiary-container": "#c4aa00",
+              "surface-variant": "#e4e2e1",
+              "secondary-container": "#e4e2e1",
+              "outline-variant": "#c0c9b9",
+              "on-surface-variant": "#41493c",
+              "inverse-on-surface": "#f3f0f0",
+              "on-primary-fixed-variant": "#055303",
+              "on-primary-fixed": "#002200",
+              "on-error": "#ffffff",
+              "surface-dim": "#dcd9d9",
+              "surface-container": "#f0eded",
+              "surface-container-highest": "#e4e2e1",
+              "secondary-fixed-dim": "#c8c6c6",
+              "on-tertiary-container": "#4a3f00",
+              "on-surface": "#1b1c1c",
+              "inverse-surface": "#303030",
+              "on-error-container": "#93000a",
+              "on-background": "#1b1c1c",
+              "error": "#ba1a1a",
+              "error-container": "#ffdad6",
+              "surface-tint": "#266c1d",
+              "outline": "#717a6b",
+              "surface-container-lowest": "#ffffff",
+              "background": "#fbf9f8",
+              "surface-bright": "#fbf9f8",
+              "on-secondary-fixed-variant": "#474747",
+              "tertiary-fixed-dim": "#e3c600",
+              "on-secondary": "#ffffff",
+              "primary": "#1b6213",
+              "surface-container-high": "#eae8e7",
+              "primary-fixed": "#a9f695",
+              "on-secondary-fixed": "#1b1c1c",
+              "inverse-primary": "#8ed97b",
+              "on-primary": "#ffffff",
+              "surface-container-low": "#f5f3f2",
+              "on-tertiary": "#ffffff",
+              "on-primary-container": "#caffb9",
+              "primary-container": "#367c2b",
+              "primary-fixed-dim": "#8ed97b",
+              "tertiary": "#6d5e00"
+            },
+            fontFamily: {
+              "headline": ["Plus Jakarta Sans"],
+              "body": ["Plus Jakarta Sans"],
+              "label": ["Plus Jakarta Sans"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+      }
+    </style>
+</head>
+<body class="bg-surface text-on-surface">
+<!-- Sidebar Navigation -->
+<aside class="fixed left-0 top-0 h-full flex flex-col h-screen w-64 bg-stone-100 dark:bg-zinc-900 border-r-0 z-50">
+<div class="p-6">
+<h1 class="text-xl font-bold text-green-800 dark:text-green-500 tracking-tight">Digital Foreman</h1>
+<p class="text-xs text-on-surface-variant font-medium opacity-70">Automation Suite</p>
+</div>
+<nav class="flex-1 px-4 space-y-1">
+<a class="flex items-center gap-3 px-4 py-3 text-stone-600 dark:text-zinc-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-stone-200 dark:hover:bg-zinc-800 transition-colors duration-200 font-medium text-sm" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+                Dashboard
+            </a>
+<!-- Active Tab: Connections -->
+<a class="flex items-center gap-3 px-4 py-3 text-green-800 dark:text-green-400 font-bold border-r-4 border-green-700 bg-stone-200/50 dark:bg-zinc-800/50 transition-all text-sm" href="#">
+<span class="material-symbols-outlined">hub</span>
+                Connections
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-600 dark:text-zinc-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-stone-200 dark:hover:bg-zinc-800 transition-colors duration-200 font-medium text-sm" href="#">
+<span class="material-symbols-outlined">visibility</span>
+                Screen Inspector
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-600 dark:text-zinc-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-stone-200 dark:hover:bg-zinc-800 transition-colors duration-200 font-medium text-sm" href="#">
+<span class="material-symbols-outlined">play_circle</span>
+                Script Runner
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-600 dark:text-zinc-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-stone-200 dark:hover:bg-zinc-800 transition-colors duration-200 font-medium text-sm" href="#">
+<span class="material-symbols-outlined">assessment</span>
+                Report Engine
+            </a>
+<a class="flex items-center gap-3 px-4 py-3 text-stone-600 dark:text-zinc-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-stone-200 dark:hover:bg-zinc-800 transition-colors duration-200 font-medium text-sm" href="#">
+<span class="material-symbols-outlined">history</span>
+                Audit Logs
+            </a>
+</nav>
+<div class="p-4 border-t border-stone-200 dark:border-zinc-800 mt-auto">
+<div class="flex items-center gap-3 px-2">
+<img alt="User profile photo" class="w-8 h-8 rounded-full object-cover" data-alt="Corporate professional headshot in business attire" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCUL0NYYzlqxlislrQ-TdTtHHbNYGqduj7YysuUU4th88izPaz5Amu4VIju6To_wD9PL5audkg-g8bBpy02XOpeZnNmiCTUImrSA65Tz_Sd9eledcr2jIEXb5GUm0cak8hz-Xa7lByjSAESkhLd0thmooYtfWrEmQC3XI64uwj3LySyVpXEaPiHwpfA91PueAmoHAfshEQTsDIYz-_vUjS2nVnjj94DC1YKUOo4XNXN61x72K9jefGC69J81XiiuMxtLWSiq9maJ9w"/>
+<div class="overflow-hidden">
+<p class="text-sm font-bold truncate">Marcus Chen</p>
+<p class="text-[10px] uppercase tracking-wider text-on-surface-variant">Lead Engineer</p>
+</div>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen">
+<!-- Top Navbar -->
+<header class="flex justify-between items-center px-8 w-full h-16 sticky top-0 z-40 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md shadow-sm dark:shadow-none border-b border-stone-200/20">
+<div class="flex items-center gap-4">
+<span class="text-lg font-black text-green-800 dark:text-green-500 uppercase tracking-tight">Automation Engine</span>
+<span class="h-4 w-px bg-stone-300 mx-2"></span>
+<span class="text-sm font-medium text-on-surface-variant">SAP Session Hub</span>
+</div>
+<div class="flex items-center gap-6">
+<div class="relative group">
+<span class="absolute left-3 top-1/2 -translate-y-1/2 material-symbols-outlined text-stone-400 text-sm">search</span>
+<input class="pl-10 pr-4 py-1.5 rounded-full bg-surface-container-low border-none text-sm focus:ring-2 focus:ring-green-600/20 w-64 transition-all" placeholder="Search systems..." type="text"/>
+</div>
+<div class="flex items-center gap-4 text-stone-500">
+<button class="hover:text-green-700 dark:hover:text-green-300 transition-colors duration-200 flex items-center">
+<span class="material-symbols-outlined">notifications</span>
+</button>
+<button class="hover:text-green-700 dark:hover:text-green-300 transition-colors duration-200 flex items-center">
+<span class="material-symbols-outlined">settings</span>
+</button>
+</div>
+</div>
+</header>
+<!-- Content Canvas -->
+<div class="p-8 max-w-7xl mx-auto">
+<!-- Page Header Section -->
+<div class="mb-10 flex justify-between items-end">
+<div>
+<h2 class="text-3xl font-extrabold tracking-tighter text-on-surface mb-2">Active Connections</h2>
+<p class="text-on-surface-variant max-w-xl">Monitor and manage real-time SAP GUI sessions across the enterprise infrastructure. Ensure optimal session load and connectivity health.</p>
+</div>
+<div class="flex gap-3">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-surface-container-highest text-on-surface font-semibold rounded hover:bg-surface-container-high transition-all text-sm">
+<span class="material-symbols-outlined text-[18px]">download</span>
+                        Export CSV
+                    </button>
+<button class="flex items-center gap-2 px-5 py-2.5 bg-primary-container text-white font-semibold rounded hover:opacity-90 transition-all text-sm shadow-sm">
+<span class="material-symbols-outlined text-[18px]">add</span>
+                        New Session
+                    </button>
+</div>
+</div>
+<!-- Stats Overview (Bento Grid Style) -->
+<div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/10">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Total Active</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black text-on-surface">42</span>
+<span class="text-green-700 text-xs font-bold">+12%</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/10">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Avg Load</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black text-on-surface">64%</span>
+<span class="text-tertiary text-xs font-bold">Stable</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/10">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Critical Errors</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black text-error">02</span>
+<span class="text-error text-xs font-bold">Action Req.</span>
+</div>
+</div>
+<div class="bg-surface-container-low p-6 rounded-xl border border-white/10">
+<p class="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-1">Last Sync</p>
+<div class="flex items-baseline gap-2">
+<span class="text-3xl font-black text-on-surface">4m</span>
+<span class="text-on-surface-variant text-xs font-medium">ago</span>
+</div>
+</div>
+</div>
+<!-- Data Table Section -->
+<div class="bg-surface-container-lowest rounded-xl shadow-sm overflow-hidden ring-1 ring-stone-200/10">
+<div class="overflow-x-auto">
+<table class="w-full text-left border-collapse">
+<thead>
+<tr class="bg-stone-50/50">
+<th class="px-6 py-4 text-xs font-black uppercase tracking-widest text-on-surface-variant">System ID</th>
+<th class="px-6 py-4 text-xs font-black uppercase tracking-widest text-on-surface-variant">Hostname</th>
+<th class="px-6 py-4 text-xs font-black uppercase tracking-widest text-on-surface-variant text-center">Sessions</th>
+<th class="px-6 py-4 text-xs font-black uppercase tracking-widest text-on-surface-variant">Status</th>
+<th class="px-6 py-4 text-xs font-black uppercase tracking-widest text-on-surface-variant text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-stone-100">
+<!-- Row 1 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">P42</div>
+<span class="font-bold text-on-surface">ECC Production</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">sap-prd-us-001.corp.jd.com</td>
+<td class="px-6 py-5 text-center">
+<span class="px-3 py-1 rounded-full bg-stone-100 text-on-surface text-xs font-bold">18</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-600"></span>
+<span class="text-xs font-bold text-green-800 uppercase">Healthy</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded transition-all">RECONNECT</button>
+<button class="px-3 py-1.5 text-xs font-bold text-error hover:bg-error/5 rounded transition-all">KILL</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-tertiary/10 flex items-center justify-center text-tertiary font-bold text-xs">D10</div>
+<span class="font-bold text-on-surface">S/4 HANA Dev</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">sap-dev-eu-12.corp.jd.com</td>
+<td class="px-6 py-5 text-center">
+<span class="px-3 py-1 rounded-full bg-stone-100 text-on-surface text-xs font-bold">04</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-tertiary animate-pulse"></span>
+<span class="text-xs font-bold text-tertiary-container text-on-tertiary-container uppercase">High Latency</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded transition-all">RECONNECT</button>
+<button class="px-3 py-1.5 text-xs font-bold text-error hover:bg-error/5 rounded transition-all">KILL</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-secondary/10 flex items-center justify-center text-secondary font-bold text-xs">Q55</div>
+<span class="font-bold text-on-surface">BW Quality</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">sap-qa-bw-09.corp.jd.com</td>
+<td class="px-6 py-5 text-center">
+<span class="px-3 py-1 rounded-full bg-stone-100 text-on-surface text-xs font-bold">12</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-green-600"></span>
+<span class="text-xs font-bold text-green-800 uppercase">Healthy</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+<button class="px-3 py-1.5 text-xs font-bold text-primary hover:bg-primary/5 rounded transition-all">RECONNECT</button>
+<button class="px-3 py-1.5 text-xs font-bold text-error hover:bg-error/5 rounded transition-all">KILL</button>
+</div>
+</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-surface-container-low transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-error/10 flex items-center justify-center text-error font-bold text-xs">S99</div>
+<span class="font-bold text-on-surface">Sandbox Global</span>
+</div>
+</td>
+<td class="px-6 py-5 text-sm font-mono text-on-surface-variant">sap-sbx-gl-00.corp.jd.com</td>
+<td class="px-6 py-5 text-center">
+<span class="px-3 py-1 rounded-full bg-stone-100 text-on-surface text-xs font-bold">00</span>
+</td>
+<td class="px-6 py-5">
+<div class="flex items-center gap-2">
+<span class="w-2 h-2 rounded-full bg-error"></span>
+<span class="text-xs font-bold text-error uppercase">Disconnected</span>
+</div>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex justify-end gap-2 opacity-100">
+<button class="px-4 py-1.5 text-xs font-bold bg-primary text-white rounded transition-all hover:opacity-90">RECONNECT</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Table Footer/Pagination -->
+<div class="px-6 py-4 bg-stone-50/50 flex justify-between items-center border-t border-stone-100">
+<p class="text-xs text-on-surface-variant font-medium">Showing <span class="text-on-surface font-bold">1 to 4</span> of 42 systems</p>
+<div class="flex gap-1">
+<button class="w-8 h-8 flex items-center justify-center rounded border border-stone-200 text-on-surface-variant hover:bg-white"><span class="material-symbols-outlined text-sm">chevron_left</span></button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-stone-200 bg-white text-primary font-bold text-xs">1</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-stone-200 text-on-surface-variant hover:bg-white text-xs">2</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-stone-200 text-on-surface-variant hover:bg-white text-xs">3</button>
+<button class="w-8 h-8 flex items-center justify-center rounded border border-stone-200 text-on-surface-variant hover:bg-white"><span class="material-symbols-outlined text-sm">chevron_right</span></button>
+</div>
+</div>
+</div>
+<!-- Footer Details/Infrastructure Map -->
+<div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+<div class="md:col-span-2">
+<div class="bg-surface-container-low rounded-xl p-6 h-64 overflow-hidden relative">
+<div class="absolute inset-0 z-0 opacity-20">
+<img alt="World Map Pattern" class="w-full h-full object-cover grayscale" data-alt="Abstract schematic world map background for infrastructure view" src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2v4zPUfEOHYfMQhz16V1otzIED5xADhpEtXniqg9LP8Sk5Z56CO3qiBiY44NI1QOgIHbCfyFKZaTnSQ5aD_HlbRPac7jbAxj4HF1vOY1iULWR5fY-lDy6T0HNBfY-r3BOnxwty-y3SAO3wV2IHweAXcIFmx9iLaNPhOFJ6Hjt27Z_Bcb6Yd7fb5eRfQTvwVsESEHe4BHqkA7ZGoDqB5LNcZVTs6Ejjadddqo9YRuOyvjfOiMjOyypfQlmFHtiOxeWS8mKNNZOlLM"/>
+</div>
+<div class="relative z-10">
+<h3 class="text-lg font-bold text-on-surface mb-1">Global Node Health</h3>
+<p class="text-sm text-on-surface-variant mb-6">Real-time status of SAP gateways across regional hubs.</p>
+<div class="flex flex-wrap gap-8">
+<div class="flex flex-col">
+<span class="text-xs uppercase font-black text-stone-400 tracking-widest mb-1">Americas</span>
+<span class="text-xl font-bold text-green-700">Operational</span>
+</div>
+<div class="flex flex-col">
+<span class="text-xs uppercase font-black text-stone-400 tracking-widest mb-1">EMEA</span>
+<span class="text-xl font-bold text-green-700">Operational</span>
+</div>
+<div class="flex flex-col">
+<span class="text-xs uppercase font-black text-stone-400 tracking-widest mb-1">APAC</span>
+<span class="text-xl font-bold text-tertiary-container">Degraded</span>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div>
+<div class="bg-primary p-6 rounded-xl h-64 flex flex-col justify-between text-white">
+<div>
+<span class="material-symbols-outlined text-3xl mb-4">bolt</span>
+<h3 class="text-xl font-extrabold leading-tight">Automation<br/>Health Check</h3>
+</div>
+<p class="text-sm opacity-80 leading-relaxed">System P42 is running 12 automated workflows. All scripts executing within nominal parameters.</p>
+<button class="w-full py-2 bg-white/10 hover:bg-white/20 transition-all rounded text-xs font-bold tracking-widest uppercase">View Details</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+</body></html>
