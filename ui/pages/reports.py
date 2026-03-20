@@ -38,6 +38,7 @@ from sap.session import Session
 from sap import ReportRunner
 from ui.components import ParameterForm
 from ui.layout import create_page_layout
+from ui.design import styles, tokens
 
 logger = logging.getLogger(__name__)
 
@@ -81,7 +82,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     
     if not session:
         logger.warning("Report Runner page accessed without active SAP session")
-        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold ' + styles.Text.WARNING)
         ui.label(
             'The Report Engine requires an active SAP connection.\n'
             'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
@@ -146,7 +147,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             param_container.clear()
             result_container.clear()
             status_label.set_text("Ready")
-            status_label.classes(remove="text-blue-700 text-green-700 text-red-700")
+            status_label.classes(remove=f'{styles.Text.INFO} {styles.Text.SUCCESS} {styles.Text.ERROR}')
             state.result_data = None
             ui.notify("Cleared", type="info")
         
@@ -156,7 +157,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
 def _render_report_browser(state: _PageState) -> None:
     """Render report browser column (left 25%)."""
     with ui.column().classes('w-1/4 gap-2'):
-        ui.label('Available Reports').classes('text-h6 font-semibold')
+        ui.label('Available Reports').classes(styles.Text.HEADING)
         
         # Search box
         search_input = ui.input('Search...', placeholder='Name, description').classes('w-full')
@@ -177,13 +178,13 @@ def _render_report_browser(state: _PageState) -> None:
             'defaultColDef': {
                 'resizable': True,
                 'cellStyle': {
-                    'color': '#111827',
+                    'color': tokens.Colors.GRAY_900,
                     'fontSize': '13px',
                 },
             },
             'rowHeight': 32,
         }).classes('w-full text-sm')
-        
+
         def load_reports(query: str = "") -> None:
             """Load and filter reports by search query."""
             if not state.available_reports:
@@ -235,22 +236,22 @@ def _render_parameter_panel() -> tuple:
     """
     with ui.column().classes('w-1/2 gap-2'):
         # Report info card
-        param_card = ui.card().classes('w-full p-3')
+        param_card = ui.card().classes(styles.Card.FLAT)
         with param_card:
-            ui.label('Report Info').classes('text-h6 font-semibold')
-            info_label = ui.label('Select a report to view parameters').classes('text-sm text-gray-600')
-        
+            ui.label('Report Info').classes(styles.Text.HEADING)
+            info_label = ui.label('Select a report to view parameters').classes(styles.Text.SMALL)
+
         # Parameter form container
-        ui.label('Parameters').classes('text-h6 font-semibold')
-        param_container = ui.column().classes('w-full gap-2 p-3 bg-gray-50 rounded')
-        ui.label('No report selected').classes('text-sm text-gray-500 italic')
+        ui.label('Parameters').classes(styles.Text.HEADING)
+        param_container = ui.column().classes(styles.Form.PARAMS_AREA)
+        ui.label('No report selected').classes(styles.Text.MUTED + ' text-sm italic')
         
         # Execution controls
         with ui.row().classes('w-full gap-2'):
             exec_btn = ui.button('Execute', icon='play_arrow').classes('flex-grow').props('color=primary size=lg')
             clear_btn = ui.button('Clear', icon='clear').classes('flex-grow').props('color=secondary size=lg')
         
-        timer_label = ui.label('0.0s').classes('text-xs text-gray-500')
+        timer_label = ui.label('0.0s').classes(styles.Text.CAPTION)
     
     return param_card, param_container, exec_btn, clear_btn, timer_label
 
@@ -263,14 +264,14 @@ def _render_result_panel() -> tuple:
     """
     with ui.column().classes('w-1/4 gap-2'):
         # Status card
-        result_card = ui.card().classes('w-full p-3 bg-blue-50')
+        result_card = ui.card().classes(styles.Card.INFO_TINTED)
         with result_card:
-            status_label = ui.label('Ready').classes('text-sm font-semibold text-blue-700')
-        
+            status_label = ui.label('Ready').classes('text-sm font-semibold ' + styles.Text.INFO)
+
         # Results grid container
         result_container = ui.column().classes('w-full gap-2')
-        ui.label('Results Grid').classes('text-xs font-semibold text-gray-600')
-        ui.label('Execute report to see results').classes('text-xs text-gray-500 italic p-4')
+        ui.label('Results Grid').classes(styles.Text.CAPTION + ' font-semibold')
+        ui.label('Execute report to see results').classes(styles.Text.CAPTION + ' italic p-4')
         
         # Export buttons
         export_btns = ui.row().classes('w-full gap-2')
@@ -314,7 +315,7 @@ async def _execute_report(
         
         # Update status
         status_label.set_text("⏱️ Running...")
-        status_label.classes('text-blue-700', remove='text-green-700 text-red-700')
+        status_label.classes(styles.Text.INFO, remove=f'{styles.Text.SUCCESS} {styles.Text.ERROR}')
         
         # Execute report (async, non-blocking) using the real ReportRunner
         report_name = state.selected_report.get('id', 'unknown')
@@ -334,7 +335,7 @@ async def _execute_report(
             elapsed = time.time() - (state.execution_start_time or time.time())
             row_count = state.result_data.row_count or 0
             status_label.set_text(f"✅ Success ({row_count} rows)")
-            status_label.classes('text-green-700', remove='text-blue-700 text-red-700')
+            status_label.classes(styles.Text.SUCCESS, remove=f'{styles.Text.INFO} {styles.Text.ERROR}')
             timer_label.set_text(f"{elapsed:.1f}s")
             
             ui.notify("Report executed successfully", type="positive")
@@ -346,13 +347,13 @@ async def _execute_report(
     except asyncio.TimeoutError:
         logger.error("Report execution timeout")
         status_label.set_text("❌ Timeout (>60s)")
-        status_label.classes('text-red-700', remove='text-blue-700 text-green-700')
+        status_label.classes(styles.Text.ERROR, remove=f'{styles.Text.INFO} {styles.Text.SUCCESS}')
         ui.notify("Report execution timed out", type="negative")
     
     except Exception as e:
         logger.error(f"Error executing report: {e}", exc_info=True)
         status_label.set_text(f"❌ Error")
-        status_label.classes('text-red-700', remove='text-blue-700 text-green-700')
+        status_label.classes(styles.Text.ERROR, remove=f'{styles.Text.INFO} {styles.Text.SUCCESS}')
         ui.notify(f"Error: {str(e)[:80]}", type="negative")
     
     finally:

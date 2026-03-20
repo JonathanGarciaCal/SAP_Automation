@@ -35,6 +35,7 @@ from config import RuntimeConfig
 from sap.session import Session
 from sap.inspector import ElementTreeWalker
 from ui.layout import create_page_layout
+from ui.design import styles, tokens
 
 logger = logging.getLogger(__name__)
 
@@ -63,7 +64,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     
     if not session:
         logger.warning("Screen Inspector page accessed without active SAP session")
-        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold ' + styles.Text.WARNING)
         ui.label(
             'The Screen Inspector requires an active SAP connection.\n'
             'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
@@ -106,21 +107,21 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
             
             # Left side: Screenshot display
             with ui.column().classes('w-1/2 gap-2'):
-                ui.label('Screenshot').classes('text-body1 font-semibold')
+                ui.label('Screenshot').classes(styles.Text.SUBHEADING)
                 
                 screenshot_container = ui.column().classes('w-full bg-gray-100 p-2 rounded').style('min-height: 70vh;')
                 with screenshot_container:
                     screenshot_image = ui.image().classes('w-full object-contain').style('max-height: 68vh;')
                     screenshot_label = ui.label('No screenshot captured yet').classes(
-                        'text-gray-500 text-center py-8'
+                        styles.Text.MUTED + ' text-center py-8'
                     )
             
             # Right side: Element grid
             with ui.column().classes('w-1/2 gap-2'):
                 # Header with label and match count
                 with ui.row().classes('w-full items-center justify-between'):
-                    ui.label('Elements').classes('text-body1 font-semibold')
-                    match_count = ui.label('0 / 0').classes('text-sm text-gray-600')
+                    ui.label('Elements').classes(styles.Text.SUBHEADING)
+                    match_count = ui.label('0 / 0').classes(styles.Text.SMALL)
                 
                 # AG Grid is used explicitly to avoid table backend mismatches across NiceGUI versions.
                 element_grid = ui.aggrid({
@@ -139,7 +140,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     'defaultColDef': {
                         'resizable': True,
                         'cellStyle': {
-                            'color': '#111827',
+                            'color': tokens.Colors.GRAY_900,
                             'fontSize': '13px',
                         },
                     },
@@ -151,18 +152,18 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         # ─────────────────────────────────────────────────────────
         # Property panel (below grid)
         # ─────────────────────────────────────────────────────────
-        with ui.card().classes('w-full p-4'):
-            ui.label('Element Properties').classes('text-body1 font-semibold')
-            
+        with ui.card().classes(styles.Card.FLAT):
+            ui.label('Element Properties').classes(styles.Text.SUBHEADING)
+
             properties_panel = ui.label('(No element selected)').classes(
-                'font-mono text-sm whitespace-pre-wrap'
+                styles.Text.MONO + ' whitespace-pre-wrap'
             )
         
         # ─────────────────────────────────────────────────────────
         # Error display (hidden by default)
         # ─────────────────────────────────────────────────────────
-        with ui.card().classes('w-full p-3 bg-red-50 hidden') as error_banner:
-            error_label = ui.label('').classes('text-red-700 text-sm')
+        with ui.card().classes(styles.Card.ERROR_TINTED + ' hidden') as error_banner:
+            error_label = ui.label('').classes(styles.Text.ERROR + ' text-sm')
         
         # ─────────────────────────────────────────────────────────
         # Event Handlers

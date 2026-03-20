@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(find c:UsersjonatReposNiceGUI_Explorations -type f -name *.agent.md)",
-      "Bash(ls \"c:\\\\Users\\\\jonat\\\\Repos\\\\NiceGUI_Explorations\\\\.github\\\\memory\"\" 2>/dev/null && echo \"EXISTS\" || echo \"NOT FOUND \")"
+      "Bash(ls \"c:\\\\Users\\\\jonat\\\\Repos\\\\NiceGUI_Explorations\\\\.github\\\\memory\"\" 2>/dev/null && echo \"EXISTS\" || echo \"NOT FOUND \")",
+      "Bash(find /c/Users/jonat/Repos/SAP_Automation -type f \\\\\\(-name *.css -o -name *.scss -o -name *.less -o -name *.json -o -name *.yaml -o -name *.yml \\\\\\) ! -path */.venv/* ! -path */__pycache__/* ! -path */.git/*)",
+      "Bash(python -c \"from ui.design import styles, tokens; print\\(''styles.Card.WARNING ='', styles.Card.WARNING\\); print\\(''styles.Text.HEADING ='', styles.Text.HEADING\\); print\\(''tokens.Colors.PRIMARY ='', tokens.Colors.PRIMARY\\); print\\(''tokens.Quasar.NEGATIVE ='', tokens.Quasar.NEGATIVE\\); print\\(''join test ='', styles.join\\(styles.Card.BASE, ''border-2''\\)\\); print\\(''OK''\\)\")",
+      "Bash(python -c \":*)"
     ]
   }
 }

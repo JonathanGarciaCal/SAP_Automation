@@ -21,6 +21,7 @@ from nicegui import ui
 
 from config import RuntimeConfig
 from ui.app import get_app_state
+from ui.design import styles
 
 logger = logging.getLogger(__name__)
 
@@ -91,7 +92,7 @@ def create_page_layout(
         with ui.column().classes('flex-grow gap-4 p-4') as main_content:
             
             # Error banner (shows if app_state['error'] is set)
-            error_label = ui.label().classes('text-red-500 text-sm')
+            error_label = ui.label().classes(styles.Text.ERROR + ' text-sm')
             error_label.visible = False
             
             def update_error_display():
@@ -122,12 +123,12 @@ def create_card(title: str, **classes_dict) -> None:
             ui.label('Status: Connected')
         ```
     """
-    card_classes = "w-full p-4 border rounded"
+    card_classes = styles.Card.BASE
     if 'classes' in classes_dict:
-        card_classes += f" {classes_dict['classes']}"
-    
+        card_classes = styles.join(card_classes, classes_dict['classes'])
+
     with ui.card().classes(card_classes):
-        ui.label(title).classes('text-h6 font-semibold')
+        ui.label(title).classes(styles.Text.HEADING)
 
 
 class PageSection:
@@ -148,9 +149,9 @@ class PageSection:
         self.container = ui.column().classes('w-full gap-2')
         self.container.__enter__()
         
-        ui.label(self.title).classes('text-h6 font-semibold')
+        ui.label(self.title).classes(styles.Text.HEADING)
         if self.description:
-            ui.label(self.description).classes('text-subtitle2 text-gray-600')
+            ui.label(self.description).classes(styles.Text.SUBHEADING)
         
         # Content container within section
         self.content = ui.column().classes('w-full gap-3')
@@ -169,6 +170,6 @@ def show_error_banner(message: str) -> None:
     Args:
         message: Error message to display
     """
-    with ui.row().classes('w-full p-3 bg-red-100 border-l-4 border-red-500'):
-        ui.icon('error').classes('text-red-500')
-        ui.label(message).classes('text-red-700 flex-grow')
+    with ui.row().classes(styles.Card.ERROR):
+        ui.icon('error').classes(styles.Text.ERROR)
+        ui.label(message).classes(styles.Text.ERROR + ' flex-grow')

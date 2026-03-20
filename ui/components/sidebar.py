@@ -18,6 +18,7 @@ from typing import Optional
 from nicegui import ui
 
 from config import RuntimeConfig
+from ui.design import styles
 
 logger = logging.getLogger(__name__)
 
@@ -50,33 +51,33 @@ def render(
     # Normalize route for comparison
     current_route_lower = current_route.lower() if current_route else 'home'
     
-    with ui.column().classes('w-48 bg-gray-100 border-r p-3 gap-2'):
-        
-        ui.label('Navigation').classes('text-h6 font-semibold text-gray-800')
-        
+    with ui.column().classes(styles.Sidebar.CONTAINER):
+
+        ui.label('Navigation').classes(styles.Sidebar.TITLE)
+
         # Home link (always shown)
-        home_link = ui.link('Home', '/').classes('w-full')
-        
+        home_link = ui.link('Home', '/').classes(styles.Sidebar.LINK)
+
         if current_route_lower == 'home':
-            home_link.classes('font-bold text-blue-600')
-        
+            home_link.classes(styles.Sidebar.LINK_ACTIVE)
+
         # Inspector link (feature-flagged)
         if config and config.features.enable_screen_inspector:
-            inspector_link = ui.link('Screen Inspector', '/inspector').classes('w-full')
-            
+            inspector_link = ui.link('Screen Inspector', '/inspector').classes(styles.Sidebar.LINK)
+
             if current_route_lower == 'inspector':
-                inspector_link.classes('font-bold text-blue-600')
-        
+                inspector_link.classes(styles.Sidebar.LINK_ACTIVE)
+
         # Script Runner link (feature-flagged)
         if config and config.features.enable_script_runner:
-            script_runner_link = ui.link('Script Runner', '/script-runner').classes('w-full')
-            
+            script_runner_link = ui.link('Script Runner', '/script-runner').classes(styles.Sidebar.LINK)
+
             if current_route_lower == 'script runner' or current_route_lower == 'script-runner':
-                script_runner_link.classes('font-bold text-blue-600')
-        
+                script_runner_link.classes(styles.Sidebar.LINK_ACTIVE)
+
         # Reports link (feature-flagged)
         if config and config.features.enable_report_engine:
-            reports_link = ui.link('Reports', '/reports').classes('w-full')
-            
+            reports_link = ui.link('Reports', '/reports').classes(styles.Sidebar.LINK)
+
             if current_route_lower == 'reports':
-                reports_link.classes('font-bold text-blue-600')
+                reports_link.classes(styles.Sidebar.LINK_ACTIVE)

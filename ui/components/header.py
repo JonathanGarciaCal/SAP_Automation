@@ -25,6 +25,7 @@ from nicegui import ui
 
 from config import RuntimeConfig
 from sap.session import Session
+from ui.design import styles
 
 logger = logging.getLogger(__name__)
 
@@ -67,13 +68,13 @@ def render(
     elif config and config.sap.username:
         username = config.sap.username
     
-    with ui.header().classes('bg-blue-700 text-white p-3 shadow-lg'):
+    with ui.header().classes(styles.Header.CONTAINER):
         with ui.row().classes('w-full items-center gap-4'):
-            
+
             # App title and page title
             with ui.column().classes('flex-grow'):
-                ui.label('SAP Automation Framework').classes('text-h6 font-bold')
-                ui.label(f'● {title}').classes('text-subtitle2 text-blue-100')
+                ui.label('SAP Automation Framework').classes(styles.Header.TITLE)
+                ui.label(f'● {title}').classes(styles.Header.SUBTITLE)
             
             # Connection status indicator
             status_indicator = ui.label().classes('text-lg')
@@ -85,17 +86,17 @@ def render(
                         is_connected = session.is_connected()
                         if is_connected:
                             status_indicator.text = '● Connected'
-                            status_indicator.classes('text-green-300', remove='text-red-300')
+                            status_indicator.classes(styles.Header.STATUS_CONNECTED, remove=styles.Header.STATUS_DISCONNECTED)
                         else:
                             status_indicator.text = '● Disconnected'
-                            status_indicator.classes('text-red-300', remove='text-green-300')
+                            status_indicator.classes(styles.Header.STATUS_DISCONNECTED, remove=styles.Header.STATUS_CONNECTED)
                     except Exception as e:
                         logger.warning("Failed to check connection status: %s", e)
                         status_indicator.text = '? Unknown'
-                        status_indicator.classes('text-yellow-300')
+                        status_indicator.classes(styles.Header.STATUS_UNKNOWN)
                 else:
                     status_indicator.text = '? Unknown'
-                    status_indicator.classes('text-yellow-300')
+                    status_indicator.classes(styles.Header.STATUS_UNKNOWN)
             
             # Initial status update (once=True fires after render, keeps NiceGUI slot context)
             ui.timer(0, update_status, once=True)
@@ -104,8 +105,8 @@ def render(
             ui.timer(5.0, update_status)
             
             # User name
-            ui.label(username).classes('text-white font-semibold')
-            
+            ui.label(username).classes(styles.Header.USERNAME)
+
             # Logout button
             async def on_logout_click() -> None:
                 """Handle logout button click."""
@@ -127,4 +128,4 @@ def render(
             ui.button(
                 icon='logout',
                 on_click=on_logout_click
-            ).props('dense flat color=white')
+            ).props(styles.Header.ICON_BUTTON_PROPS)

@@ -37,6 +37,7 @@ from config import RuntimeConfig
 from sap import ScriptManager, ScriptEntry, ScriptMetadata
 from sap.session import Session
 from ui.layout import create_page_layout
+from ui.design import styles, tokens
 
 logger = logging.getLogger(__name__)
 
@@ -82,7 +83,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
     
     if not session:
         logger.warning("Script Runner page accessed without active SAP session")
-        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold text-orange-500')
+        ui.label('📡 SAP Connection Required').classes('text-h6 font-semibold ' + styles.Text.WARNING)
         ui.label(
             'The Script Runner requires an active SAP connection.\n'
             'Please complete SAP connection setup in Phase 1 (see main.py TODO line).'
@@ -127,7 +128,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
 def _render_script_browser(state: _PageState) -> None:
     """Render script browser column."""
     with ui.column().classes('w-1/4 gap-2'):
-        ui.label('Scripts').classes('text-h6 font-semibold')
+        ui.label('Scripts').classes(styles.Text.HEADING)
         
         search = ui.input('Search...', placeholder='Name, tags').classes('w-full')
         
@@ -144,13 +145,13 @@ def _render_script_browser(state: _PageState) -> None:
             'defaultColDef': {
                 'resizable': True,
                 'cellStyle': {
-                    'color': '#111827',
+                    'color': tokens.Colors.GRAY_900,
                     'fontSize': '13px',
                 },
             },
             'rowHeight': 32,
         }).classes('w-full text-sm')
-        
+
         def load_scripts(query: str = "") -> None:
             if not state.manager:
                 return
@@ -186,20 +187,20 @@ def _render_script_browser(state: _PageState) -> None:
 def _render_parameter_panel() -> tuple:
     """Render parameter form and execution controls. Returns (exec_btn, cancel_btn, timer, params_area)."""
     with ui.column().classes('w-1/2 gap-2'):
-        with ui.card().classes('w-full p-3'):
-            ui.label('Script Info').classes('text-h6 font-semibold')
-            ui.label('No script selected').classes('text-sm text-gray-600')
-        
-        ui.label('Parameters').classes('text-h6 font-semibold')
-        params_area = ui.column().classes('w-full gap-2 p-3 bg-gray-50 rounded')
-        ui.label('Select a script').classes('text-sm text-gray-500 italic')
+        with ui.card().classes(styles.Card.FLAT):
+            ui.label('Script Info').classes(styles.Text.HEADING)
+            ui.label('No script selected').classes(styles.Text.SMALL)
+
+        ui.label('Parameters').classes(styles.Text.HEADING)
+        params_area = ui.column().classes(styles.Form.PARAMS_AREA)
+        ui.label('Select a script').classes(styles.Text.MUTED + ' text-sm italic')
         
         with ui.row().classes('w-full gap-2'):
             exec_btn = ui.button('Execute', icon='play_arrow').classes('flex-grow').props('color=primary size=lg')
             cancel_btn = ui.button('Cancel', icon='stop').classes('flex-grow').props('color=warning size=lg')
             cancel_btn.enabled = False
         
-        timer_label = ui.label('0.0s').classes('text-xs text-gray-500')
+        timer_label = ui.label('0.0s').classes(styles.Text.CAPTION)
     
     return exec_btn, cancel_btn, timer_label, params_area
 
@@ -207,15 +208,15 @@ def _render_parameter_panel() -> tuple:
 def _render_output_panel() -> tuple:
     """Render output and history panel. Returns (output_area, status_label, history_table)."""
     with ui.column().classes('w-1/4 gap-2'):
-        with ui.card().classes('w-full p-3 bg-blue-50'):
-            status_label = ui.label('Ready').classes('text-sm font-semibold text-blue-700')
-        
+        with ui.card().classes(styles.Card.INFO_TINTED):
+            status_label = ui.label('Ready').classes('text-sm font-semibold ' + styles.Text.INFO)
+
         with ui.card().classes('w-full p-2'):
-            ui.label('Output').classes('text-xs font-semibold')
+            ui.label('Output').classes(styles.Text.CAPTION + ' font-semibold')
             output_area = ui.textarea(value='', placeholder='Output...').classes('w-full text-xs font-mono').props('readonly rows=8')
         
         with ui.card().classes('w-full p-2'):
-            ui.label('History').classes('text-xs font-semibold')
+            ui.label('History').classes(styles.Text.CAPTION + ' font-semibold')
             history_table = ui.table(
                 columns=[{'name': 't', 'label': 'Time', 'field': 't'}, {'name': 's', 'label': 'Status', 'field': 's'}],
                 rows=[],
@@ -251,7 +252,7 @@ async def _execute_script(
     try:
         output_area.value = f"Executing: {state.selected_script.name}\n\n"
         status_label.text = "⏱️ Running..."
-        status_label.classes('text-blue-700', remove='text-green-700 text-red-700')
+        status_label.classes(styles.Text.INFO, remove=f'{styles.Text.SUCCESS} {styles.Text.ERROR}')
         
         # Simulate execution (real version calls session.execute_script)
         await asyncio.sleep(0.5)
@@ -259,7 +260,7 @@ async def _execute_script(
         duration = time.time() - start_time
         output_area.value += f"✓ Completed in {duration:.2f}s\n"
         status_label.text = "✅ Success"
-        status_label.classes('text-green-700', remove='text-blue-700 text-red-700')
+        status_label.classes(styles.Text.SUCCESS, remove=f'{styles.Text.INFO} {styles.Text.ERROR}')
         ui.notify("Success", type="positive")
         
         # Add to history
@@ -272,7 +273,7 @@ async def _execute_script(
         logger.error(f"Error: {e}")
         output_area.value += f"\n✗ Error: {str(e)}\n"
         status_label.text = "❌ Failed"
-        status_label.classes('text-red-700', remove='text-blue-700 text-green-700')
+        status_label.classes(styles.Text.ERROR, remove=f'{styles.Text.INFO} {styles.Text.SUCCESS}')
         ui.notify(f"Error: {str(e)}", type="negative")
     
     finally:

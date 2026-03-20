@@ -57,6 +57,7 @@ from datetime import datetime
 
 from nicegui import ui
 
+from ui.design import styles
 from sap.error_handler import (
     SAPBridgeError,
     SAPConnectionError,
@@ -236,7 +237,7 @@ class ErrorDisplay:
         icon = ERROR_ICONS.get(error_class_name, "error")
         
         with ui.dialog() as dialog:
-            with ui.card().classes('w-96 gap-0'):
+            with ui.card().classes(styles.Modal.CONTAINER):
                 
                 # ─────────────────────────────────────────────────────────
                 # Header section with icon and title
@@ -249,7 +250,7 @@ class ErrorDisplay:
                         )
                         ui.label(
                             "An error occurred during the operation"
-                        ).classes('text-sm text-gray-600')
+                        ).classes(styles.Text.SMALL)
                 
                 # ─────────────────────────────────────────────────────────
                 # Main content section
@@ -257,30 +258,26 @@ class ErrorDisplay:
                 with ui.column().classes('gap-3 p-4'):
                     
                     # Error message
-                    ui.label('Error:').classes('text-sm font-semibold text-gray-700')
+                    ui.label('Error:').classes(styles.Text.LABEL)
                     ui.label(self.error.message).classes(
-                        'text-base text-gray-800 whitespace-pre-wrap'
+                        styles.Text.BODY + ' whitespace-pre-wrap'
                     )
-                    
+
                     # Recovery hint (if applicable)
                     hint = RECOVERY_HINTS.get(error_class_name)
                     if hint:
                         ui.separator()
-                        ui.label('What to do:').classes(
-                            'text-sm font-semibold text-gray-700'
-                        )
+                        ui.label('What to do:').classes(styles.Text.LABEL)
                         with ui.row().classes('w-full gap-2'):
-                            ui.icon('info').classes('text-blue-600 text-lg')
+                            ui.icon('info').classes(styles.Text.INFO + ' text-lg')
                             ui.label(hint).classes(
-                                'text-sm text-gray-700 whitespace-pre-wrap'
+                                styles.Text.SMALL + ' whitespace-pre-wrap'
                             )
-                    
+
                     # Context information
                     if self.error.context and self._has_context():
                         ui.separator()
-                        ui.label('Context:').classes(
-                            'text-sm font-semibold text-gray-700'
-                        )
+                        ui.label('Context:').classes(styles.Text.LABEL)
                         context_items = self._get_context_items()
                         for label, value in context_items:
                             with ui.row().classes('w-full gap-2'):
@@ -288,13 +285,13 @@ class ErrorDisplay:
                                     'text-sm font-mono text-gray-600 w-24'
                                 )
                                 ui.label(str(value)).classes(
-                                    'text-sm font-mono text-gray-800 flex-grow'
+                                    styles.Text.MONO + ' flex-grow'
                                 )
                 
                 # ─────────────────────────────────────────────────────────
                 # Action buttons
                 # ─────────────────────────────────────────────────────────
-                with ui.row().classes('w-full gap-2 p-4 justify-end bg-gray-50'):
+                with ui.row().classes(styles.Modal.FOOTER):
                     
                     # Retry button (only if error is recoverable)
                     if is_recoverable and self.on_retry:
@@ -342,7 +339,7 @@ class ErrorDisplay:
                     ui.button(
                         'Dismiss',
                         on_click=handle_dismiss_click
-                    ).classes('text-gray-600')
+                    ).classes(styles.Text.MUTED)
         
         self._dialog = dialog
     
@@ -458,11 +455,11 @@ class LogViewer:
     def _build_dialog(self) -> None:
         """Build the log viewer modal."""
         with ui.dialog() as dialog:
-            with ui.card().classes('w-full h-screen gap-0 p-0'):
-                
+            with ui.card().classes(styles.Modal.CONTAINER_LG):
+
                 # Header
-                with ui.row().classes('w-full p-4 bg-gray-100 border-b'):
-                    ui.label('Error Log Details').classes('text-h6 font-semibold flex-grow')
+                with ui.row().classes(styles.Modal.HEADER_NEUTRAL):
+                    ui.label('Error Log Details').classes(styles.Text.HEADING + ' flex-grow')
                     ui.button(
                         icon='close',
                         on_click=lambda: dialog.close()
@@ -474,7 +471,7 @@ class LogViewer:
                     ui.code(log_content, language='json').classes('w-full text-xs')
                 
                 # Footer with copy button
-                with ui.row().classes('w-full p-4 gap-2 bg-gray-50 border-t justify-end'):
+                with ui.row().classes(styles.Modal.FOOTER_BORDER):
                     
                     async def copy_to_clipboard() -> None:
                         """Copy log content to clipboard."""
@@ -497,7 +494,7 @@ class LogViewer:
                     ui.button(
                         'Close',
                         on_click=lambda: dialog.close()
-                    ).classes('text-gray-600')
+                    ).classes(styles.Text.MUTED)
         
         self._dialog = dialog
     

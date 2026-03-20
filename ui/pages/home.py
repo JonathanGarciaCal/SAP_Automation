@@ -33,6 +33,7 @@ from config import RuntimeConfig
 from sap.session import Session
 from ui.layout import create_page_layout
 from ui.app import connect_to_sap, get_app_state
+from ui.design import styles
 from utils.sap_systems import get_sap_systems
 
 logger = logging.getLogger(__name__)
@@ -90,18 +91,18 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         
         # Initial connection warning if no session
         if not session:
-            with ui.card().classes('w-full p-4 bg-orange-50 border-l-4 border-orange-500'):
-                ui.label('📡 Awaiting SAP Connection').classes('text-h6 font-semibold text-orange-700')
+            with ui.card().classes(styles.Card.WARNING):
+                ui.label('📡 Awaiting SAP Connection').classes('text-h6 font-semibold ' + styles.Text.WARNING)
                 ui.label(
                     "SAP connection initialization is pending (Phase 1 TODO).\n"
                     "Once connected, you'll see connection details and can access other features."
-                ).classes('text-body2 text-orange-600')
+                ).classes('text-body2 ' + styles.Text.WARNING)
         
         # ─────────────────────────────────────────────────────────
         # Section 1: Connection Status Card
         # ─────────────────────────────────────────────────────────
-        with ui.card().classes('w-full p-4'):
-            ui.label('SAP Connection Status').classes('text-h6 font-semibold')
+        with ui.card().classes(styles.Card.FLAT):
+            ui.label('SAP Connection Status').classes(styles.Text.HEADING)
             
             # Status info row
             with ui.row().classes('w-full gap-4 p-3 bg-gray-50 rounded'):
@@ -124,7 +125,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         # Prefer live session from app state so status updates reflect post-connect state.
                         if active_session and active_session.is_connected():
                             connection_status_label.text = '✅ Connected'
-                            connection_status_label.classes('text-green-600', remove='text-red-600')
+                            connection_status_label.classes(styles.Text.SUCCESS, remove=styles.Text.ERROR)
 
                             details = await asyncio.wait_for(
                                 active_session.get_connection_status(),
@@ -138,7 +139,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                             screen_display.text = f"Screen: {details.get('screen') or '(unavailable)'}"
                         else:
                             connection_status_label.text = '⚠️ Disconnected'
-                            connection_status_label.classes('text-red-600', remove='text-green-600')
+                            connection_status_label.classes(styles.Text.ERROR, remove=styles.Text.SUCCESS)
                             system_display.text = 'System: N/A'
                             client_display.text = f"Client: {config.sap.client if config else 'N/A'}"
                             user_display.text = 'User: N/A'
@@ -149,7 +150,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     except Exception as e:
                         logger.error("Error updating connection status: %s", e)
                         connection_status_label.text = f'❌ Error: {str(e)[:30]}'
-                        connection_status_label.classes('text-red-600')
+                        connection_status_label.classes(styles.Text.ERROR)
                 
                 # Defer initial status update — avoids blocking page render
                 ui.timer(0.1, update_connection_status, once=True)
@@ -167,8 +168,8 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         # ─────────────────────────────────────────────────────────
         # Section 1.5: SAP System Selector & Connect
         # ─────────────────────────────────────────────────────────
-        with ui.card().classes('w-full p-4'):
-            ui.label('Connect to SAP').classes('text-h6 font-semibold')
+        with ui.card().classes(styles.Card.FLAT):
+            ui.label('Connect to SAP').classes(styles.Text.HEADING)
             
             # Shared state for selected system
             selected_system: Dict[str, Optional[str]] = {'value': None}
@@ -243,7 +244,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                         
                         # Success
                         status_label.text = f'✅ Connected to {system_id}'
-                        status_label.classes('text-green-600', remove='text-red-600')
+                        status_label.classes(styles.Text.SUCCESS, remove=styles.Text.ERROR)
                         ui.notify(f'Connected to {system_id}', type='positive')
                         log_operation(f'Connect {system_id}', 'Connected', 'Success')
                         await update_connection_status()
@@ -254,7 +255,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     
                     except asyncio.TimeoutError:
                         status_label.text = '❌ Connection timeout (30s)'
-                        status_label.classes('text-red-600', remove='text-green-600')
+                        status_label.classes(styles.Text.ERROR, remove=styles.Text.SUCCESS)
                         ui.notify('Connection timeout after 30 seconds', type='negative')
                         log_operation(f'Connect {system_id}', 'Failed', 'Timeout')
                         if spinner_row:
@@ -263,7 +264,7 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                     except Exception as e:
                         error_msg = str(e)[:60]
                         status_label.text = f'❌ {error_msg}'
-                        status_label.classes('text-red-600', remove='text-green-600')
+                        status_label.classes(styles.Text.ERROR, remove=styles.Text.SUCCESS)
                         ui.notify(f'Connection failed: {error_msg}', type='negative')
                         log_operation(f'Connect {system_id}', 'Failed', error_msg)
                         if spinner_row:
@@ -278,13 +279,13 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
                 connect_button = ui.button('Connect', on_click=handle_connect_click).props('unelevated color=positive')
             
             # Status display
-            status_label.classes('text-sm text-gray-600')
+            status_label.classes(styles.Text.SMALL)
         
         # ─────────────────────────────────────────────────────────
         # Section 2: Quick Action Buttons (3x2 grid)
         # ─────────────────────────────────────────────────────────
-        with ui.card().classes('w-full p-4'):
-            ui.label('Quick Actions').classes('text-h6 font-semibold')
+        with ui.card().classes(styles.Card.FLAT):
+            ui.label('Quick Actions').classes(styles.Text.HEADING)
             
             # Create button state trackers
             button_states: Dict[str, Dict[str, Any]] = {
@@ -465,8 +466,8 @@ async def page(session: Optional[Session] = None, config: Optional[RuntimeConfig
         # ─────────────────────────────────────────────────────────
         # Section 3: Recent Operations Log
         # ─────────────────────────────────────────────────────────
-        with ui.card().classes('w-full p-4'):
-            ui.label('Recent Operations (Last 10)').classes('text-h6 font-semibold')
+        with ui.card().classes(styles.Card.FLAT):
+            ui.label('Recent Operations (Last 10)').classes(styles.Text.HEADING)
             
             # Create columns for the operations table
             columns = [
